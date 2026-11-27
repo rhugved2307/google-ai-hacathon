@@ -1,0 +1,79 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    scroll-behavior: smooth;
+  }
+
+  .dark body {
+    letter-spacing: 0.005em;
+  }
+
+  ::-webkit-scrollbar {
+    width: 7px;
+    height: 7px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.35);
+    border-radius: 9999px;
+  }
+
+  .dark ::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.22);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.5);
+  }
+}
+
+/* Signature violet 3D spheres card background matching reference first page */
+.veltrix-orb-stage {
+  background: radial-gradient(circle at 50% 42%, #4a2eb0 0%, #26165e 52%, #130b2e 100%);
+}
+
+.veltrix-orb-sphere {
+  border-radius: 9999px;
+  background: radial-gradient(circle at 30% 25%, #9f7aea 0%, #5b21b6 48%, #1e1042 100%);
+  box-shadow:
+    inset -8px -12px 24px rgba(10, 5, 28, 0.72),
+    inset 4px 4px 12px rgba(216, 180, 254, 0.35),
+    0 14px 30px rgba(8, 4, 24, 0.65);
+}
+
+/* Main left violet dashboard panel gradient matching reference */
+@utility veltrix-overview-panel {
+  background: radial-gradient(circle at 75% 18%, rgba(91, 45, 195, 0.32), transparent 55%),
+    radial-gradient(circle at 18% 85%, rgba(76, 29, 149, 0.24), transparent 60%),
+    linear-gradient(180deg, #12101d 0%, #16112b 55%, #110e20 100%);
+}
+
+/* Subtle ambient glow for workspace view */
+@utility veltrix-ambient-bg {
+  background-image:
+    radial-gradient(600px circle at 14% 0%, rgba(139, 92, 246, 0.12), transparent 65%),
+    radial-gradient(520px circle at 88% 4%, rgba(34, 211, 238, 0.06), transparent 65%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

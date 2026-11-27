@@ -1,0 +1,6 @@
+{
+  "name": "PrivyClean",
+  "description": "Privacy-first browser-based PII detection and sanitization tool. Detect, classify, highlight, and redact sensitive data from text and CSV files entirely on your device.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
