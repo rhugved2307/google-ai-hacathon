@@ -4,8 +4,8 @@ import {
   type CandidateMatch,
 } from './patterns';
 import { buildReplacement } from './redactor';
+import { buildCategoryStats } from './stats';
 import type {
-  CategoryStat,
   ConfidenceLevel,
   CustomRule,
   Detection,
@@ -244,15 +244,7 @@ export function scanAndSanitizeText(text: string, options: ScanOptions): ScanRes
   const sanitizedText = chunks.join('');
 
   const totalDetections = detections.length;
-  const categoryStats: CategoryStat[] = (Object.entries(countsByCategory) as [PIICategory, number][])
-    .filter(([, count]) => count > 0)
-    .map(([category, count]) => ({
-      category,
-      label: CATEGORY_META[category].label,
-      count,
-      percentage: totalDetections > 0 ? Math.round((count / totalDetections) * 1000) / 10 : 0,
-    }))
-    .sort((a, b) => b.count - a.count);
+  const categoryStats = buildCategoryStats(countsByCategory, totalDetections);
 
   const t1 = typeof performance !== 'undefined' ? performance.now() : Date.now();
 

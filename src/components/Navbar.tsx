@@ -12,10 +12,10 @@ import {
   Sun,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import type { RedactionMode } from '../engine/types';
+import type { AppPage, RedactionMode } from '../engine/types';
 import type { ThemeMode } from '../hooks/useTheme';
 
-export type AppPage = 'overview' | 'workspace';
+export type { AppPage };
 
 interface NavbarProps {
   activePage: AppPage;

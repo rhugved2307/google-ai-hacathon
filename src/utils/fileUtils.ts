@@ -1,12 +1,8 @@
-import type { UploadedFileInfo } from '../engine/types';
+import type { FileValidationResult, UploadedFileInfo } from '../engine/types';
+
+export type { FileValidationResult };
 
 export const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB client-side limit
-
-export interface FileValidationResult {
-  valid: boolean;
-  fileType?: 'txt' | 'csv';
-  error?: string;
-}
 
 export function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';

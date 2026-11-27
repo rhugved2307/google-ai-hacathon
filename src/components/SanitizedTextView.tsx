@@ -1,12 +1,12 @@
 import { memo, useMemo } from 'react';
-import type { Detection, PIICategory } from '../engine/types';
+import type { CategoryFilter, Detection, PIICategory } from '../engine/types';
 
 interface SanitizedTextViewProps {
   rawText: string;
   sanitizedText: string;
   detections: Detection[];
   isCSVMode: boolean;
-  activeCategoryFilter: PIICategory | 'ALL';
+  activeCategoryFilter: CategoryFilter;
   fontClass?: string;
   fontSizePx?: number;
 }

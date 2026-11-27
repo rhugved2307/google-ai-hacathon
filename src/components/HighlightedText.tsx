@@ -1,14 +1,14 @@
 import { Eye, EyeOff } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { CATEGORY_META } from '../engine/patterns';
-import type { Detection, PIICategory } from '../engine/types';
+import type { CategoryFilter, Detection, PIICategory } from '../engine/types';
 
 interface HighlightedTextProps {
   text: string;
   detections: Detection[];
   showHighlights: boolean;
   onToggleHighlights: () => void;
-  activeCategoryFilter: PIICategory | 'ALL';
+  activeCategoryFilter: CategoryFilter;
   fontClass?: string;
   fontSizePx?: number;
 }

@@ -1,51 +1,53 @@
 import type { PIICategory, RedactionMode } from './types';
 
 function maskMiddle(value: string, keepStart: number, keepEnd: number): string {
-  if (value.length <= keepStart + keepEnd) {
+  const safeStart = Math.max(0, keepStart);
+  const safeEnd = Math.max(0, keepEnd);
+  if (!value) return '***';
+  if (value.length <= safeStart + safeEnd) {
     return '*'.repeat(Math.max(value.length, 3));
   }
-  const start = value.slice(0, keepStart);
-  const end = keepEnd > 0 ? value.slice(value.length - keepEnd) : '';
-  const maskedLen = value.length - keepStart - keepEnd;
+  const start = value.slice(0, safeStart);
+  const end = safeEnd > 0 ? value.slice(value.length - safeEnd) : '';
+  const maskedLen = value.length - safeStart - safeEnd;
   return `${start}${'*'.repeat(maskedLen)}${end}`;
+}
+
+function maskHandleAtDomain(value: string): string {
+  const atIdx = value.indexOf('@');
+  if (atIdx <= 0) return maskMiddle(value, 1, 2);
+  const handle = value.slice(0, atIdx);
+  const domain = value.slice(atIdx);
+  const maskedHandle =
+    handle.length <= 1 ? '*' : `${handle[0]}${'*'.repeat(Math.max(handle.length - 1, 3))}`;
+  return `${maskedHandle}${domain}`;
+}
+
+function maskKeepLastDigits(value: string, keepLast = 4, maskChar = '*'): string {
+  const totalDigits = value.replace(/\D/g, '').length;
+  if (totalDigits === 0) return maskMiddle(value, 1, 1);
+  let digitsSeen = 0;
+  return value.replace(/\d/g, (digit) => {
+    digitsSeen += 1;
+    return digitsSeen <= totalDigits - keepLast ? maskChar : digit;
+  });
 }
 
 export function partialMaskValue(raw: string, category: PIICategory): string {
   const value = raw.trim();
+  if (!value) return `[${category}]`;
 
   switch (category) {
-    case 'EMAIL': {
-      const atIdx = value.indexOf('@');
-      if (atIdx <= 0) return maskMiddle(value, 1, 2);
-      const local = value.slice(0, atIdx);
-      const domain = value.slice(atIdx);
-      const maskedLocal =
-        local.length <= 1 ? '*' : `${local[0]}${'*'.repeat(Math.max(local.length - 1, 3))}`;
-      return `${maskedLocal}${domain}`;
-    }
-
-    case 'UPI': {
-      const atIdx = value.indexOf('@');
-      if (atIdx <= 0) return maskMiddle(value, 1, 2);
-      const user = value.slice(0, atIdx);
-      const psp = value.slice(atIdx);
-      const maskedUser =
-        user.length <= 1 ? '*' : `${user[0]}${'*'.repeat(Math.max(user.length - 1, 3))}`;
-      return `${maskedUser}${psp}`;
-    }
+    case 'EMAIL':
+    case 'UPI':
+      return maskHandleAtDomain(value);
 
     case 'PHONE': {
-      // Preserve +91 prefix if present, mask digits except last 4
+      // Preserve +91 / 0 prefix if present, mask digits except last 4
       const prefixMatch = /^(\+91[\s-]?|0)/.exec(value);
       const prefix = prefixMatch ? prefixMatch[1] : '';
       const rest = value.slice(prefix.length);
-      let digitsSeen = 0;
-      const totalDigits = rest.replace(/\D/g, '').length;
-      const maskedRest = rest.replace(/\d/g, (digit) => {
-        digitsSeen += 1;
-        return digitsSeen <= totalDigits - 4 ? '*' : digit;
-      });
-      return `${prefix}${maskedRest}`;
+      return `${prefix}${maskKeepLastDigits(rest, 4, '*')}`;
     }
 
     case 'PAN': {
@@ -65,14 +67,9 @@ export function partialMaskValue(raw: string, category: PIICategory): string {
       });
     }
 
-    case 'CARD': {
-      const totalDigits = value.replace(/\D/g, '').length;
-      let digitsSeen = 0;
-      return value.replace(/\d/g, (digit) => {
-        digitsSeen += 1;
-        return digitsSeen <= totalDigits - 4 ? '*' : digit;
-      });
-    }
+    case 'CARD':
+    case 'BANK_ACCOUNT':
+      return maskKeepLastDigits(value, 4, '*');
 
     case 'IP_ADDRESS': {
       const parts = value.split('.');
@@ -102,11 +99,11 @@ export function partialMaskValue(raw: string, category: PIICategory): string {
       // Keep only the year if 4-digit year exists
       const yearMatch = /\b(19|20)\d{2}\b/.exec(value);
       if (yearMatch) {
-        return value.replace(/\d/g, (ch, offset) => {
-          const yStart = yearMatch.index;
-          const yEnd = yStart + 4;
-          return offset >= yStart && offset < yEnd ? ch : '*';
-        });
+        const yStart = yearMatch.index;
+        const yEnd = yStart + 4;
+        return value.replace(/\d/g, (ch, offset: number) =>
+          offset >= yStart && offset < yEnd ? ch : '*'
+        );
       }
       return maskMiddle(value, 0, 4);
     }
@@ -128,7 +125,9 @@ export function partialMaskValue(raw: string, category: PIICategory): string {
         const maskedParts = parts.map((part, idx) => {
           if (idx === parts.length - 1) {
             // Keep first 2 characters of last locality token
-            return part.length > 2 ? `${part.slice(0, 2)}${'*'.repeat(Math.min(part.length - 2, 5))}` : '***';
+            return part.length > 2
+              ? `${part.slice(0, 2)}${'*'.repeat(Math.min(part.length - 2, 5))}`
+              : '***';
           }
           return part.replace(/[A-Za-z0-9]/g, '*');
         });
@@ -137,22 +136,13 @@ export function partialMaskValue(raw: string, category: PIICategory): string {
       return maskMiddle(value, 2, 2);
     }
 
-    case 'PASSPORT': {
+    case 'PASSPORT':
       return maskMiddle(value, 1, 2);
-    }
 
-    case 'BANK_ACCOUNT': {
-      const totalDigits = value.replace(/\D/g, '').length;
-      let digitsSeen = 0;
-      return value.replace(/\d/g, (digit) => {
-        digitsSeen += 1;
-        return digitsSeen <= totalDigits - 4 ? '*' : digit;
-      });
-    }
-
-    case 'PIN_CODE': {
-      return value.length === 6 ? `${value.slice(0, 2)}***${value.slice(5)}` : maskMiddle(value, 2, 1);
-    }
+    case 'PIN_CODE':
+      return value.length === 6
+        ? `${value.slice(0, 2)}***${value.slice(5)}`
+        : maskMiddle(value, 2, 1);
 
     case 'CUSTOM':
     default:
@@ -167,9 +157,11 @@ export function buildReplacement(
   customReplacements: Record<PIICategory, string>,
   customRuleReplacement?: string
 ): string {
+  const safeCustomRule = customRuleReplacement?.trim();
+
   if (mode === 'full') {
-    if (category === 'CUSTOM' && customRuleReplacement) {
-      return customRuleReplacement;
+    if (category === 'CUSTOM' && safeCustomRule) {
+      return safeCustomRule;
     }
     return `[${category}]`;
   }
@@ -177,8 +169,8 @@ export function buildReplacement(
     return partialMaskValue(rawValue, category);
   }
   // Custom replacement mode
-  if (category === 'CUSTOM' && customRuleReplacement) {
-    return customRuleReplacement;
+  if (category === 'CUSTOM' && safeCustomRule) {
+    return safeCustomRule;
   }
   const configured = customReplacements[category]?.trim();
   return configured ? configured : `[${category}]`;

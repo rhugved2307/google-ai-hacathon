@@ -1,5 +1,7 @@
 import { AlertTriangle, CheckCircle2, Keyboard, ShieldCheck, X } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
+import { useDialogAccessibility } from '../hooks/useDialogAccessibility';
+import { getBrowserStorageCounts } from '../utils/storageAudit';
 
 interface PrivacyModalProps {
   open: boolean;
@@ -8,49 +10,12 @@ interface PrivacyModalProps {
 
 export function PrivacyModal({ open, onClose }: PrivacyModalProps) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    previousFocusRef.current = document.activeElement as HTMLElement | null;
-
-    const dialog = dialogRef.current;
-    const focusableSelector =
-      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-    const focusables = dialog?.querySelectorAll<HTMLElement>(focusableSelector);
-    focusables?.[0]?.focus();
-
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
-        return;
-      }
-      if (e.key === 'Tab' && dialog) {
-        const items = Array.from(dialog.querySelectorAll<HTMLElement>(focusableSelector));
-        if (items.length === 0) return;
-        const first = items[0];
-        const last = items[items.length - 1];
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => {
-      window.removeEventListener('keydown', handleKey);
-      previousFocusRef.current?.focus();
-    };
-  }, [open, onClose]);
+  useDialogAccessibility(open, dialogRef, onClose);
 
   if (!open) return null;
 
-  const localStorageCount = typeof window !== 'undefined' ? window.localStorage.length : 0;
-  const sessionStorageCount = typeof window !== 'undefined' ? window.sessionStorage.length : 0;
+  const { totalKeys } = getBrowserStorageCounts();
 
   return (
     <div
@@ -111,7 +76,7 @@ export function PrivacyModal({ open, onClose }: PrivacyModalProps) {
               'Processing method: Browser-only',
               'External data transmission: None',
               'API calls with user content: None',
-              `Persistent storage keys: ${localStorageCount + sessionStorageCount}`,
+              `Persistent storage keys: ${totalKeys}`,
               'File upload to backend: None',
               'Console logging of raw PII: Disabled',
             ].map((item) => (

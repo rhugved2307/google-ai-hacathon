@@ -1,19 +1,52 @@
-import type { CSVScanResult, RedactionMode, ScanResult } from '../engine/types';
+import type {
+  CSVScanResult,
+  ExportResult,
+  RedactionMode,
+  ScanResult,
+  SourceType,
+} from '../engine/types';
 
-function triggerLocalBlobDownload(content: string, filename: string, mimeType: string): void {
-  const blob = new Blob([content], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.style.display = 'none';
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+export type { ExportResult };
+
+function triggerLocalBlobDownload(
+  content: string,
+  filename: string,
+  mimeType: string
+): ExportResult {
+  if (typeof document === 'undefined' || typeof URL === 'undefined' || !document.body) {
+    return { success: false, error: 'File download is unavailable in this environment.' };
+  }
+
+  let url: string | null = null;
+  let anchor: HTMLAnchorElement | null = null;
+
+  try {
+    const blob = new Blob([content], { type: mimeType });
+    url = URL.createObjectURL(blob);
+    anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.style.display = 'none';
+    document.body.appendChild(anchor);
+    anchor.click();
+    return { success: true, filename };
+  } catch {
+    return {
+      success: false,
+      error: 'Unable to export file locally. Check browser download permissions.',
+    };
+  } finally {
+    if (anchor && anchor.parentNode) {
+      anchor.parentNode.removeChild(anchor);
+    }
+    if (url) {
+      const objectUrl = url;
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    }
+  }
 }
 
-function getBaseFilename(originalName?: string): string {
+export function getBaseFilename(originalName?: string): string {
   if (!originalName) return 'sanitized-custom-input';
   const dotIdx = originalName.lastIndexOf('.');
   const stem = dotIdx > 0 ? originalName.slice(0, dotIdx) : originalName;
@@ -21,27 +54,41 @@ function getBaseFilename(originalName?: string): string {
   return `sanitized-${safeStem}`;
 }
 
-export function downloadSanitizedTxt(sanitizedText: string, originalFilename?: string): void {
+export function downloadSanitizedTxt(
+  sanitizedText: string,
+  originalFilename?: string
+): ExportResult {
+  if (!sanitizedText) {
+    return { success: false, error: 'There is no sanitized text to export.' };
+  }
   const filename = `${getBaseFilename(originalFilename)}.txt`;
-  triggerLocalBlobDownload(sanitizedText, filename, 'text/plain;charset=utf-8');
+  return triggerLocalBlobDownload(sanitizedText, filename, 'text/plain;charset=utf-8');
 }
 
-export function downloadSanitizedCsv(sanitizedCsv: string, originalFilename?: string): void {
+export function downloadSanitizedCsv(
+  sanitizedCsv: string,
+  originalFilename?: string
+): ExportResult {
+  if (!sanitizedCsv) {
+    return { success: false, error: 'There is no sanitized CSV content to export.' };
+  }
   const filename = `${getBaseFilename(originalFilename)}.csv`;
-  triggerLocalBlobDownload(sanitizedCsv, filename, 'text/csv;charset=utf-8');
+  return triggerLocalBlobDownload(sanitizedCsv, filename, 'text/csv;charset=utf-8');
+}
+
+export interface SummaryReportParams {
+  sourceName: string;
+  sourceType: SourceType;
+  redactionMode: RedactionMode;
+  result: ScanResult;
+  csvResult?: CSVScanResult | null;
 }
 
 /**
  * Generates and downloads a privacy-safe sanitization summary report.
  * Strictly excludes any original raw PII values.
  */
-export function downloadSummaryReport(params: {
-  sourceName: string;
-  sourceType: 'text' | 'txt' | 'csv';
-  redactionMode: RedactionMode;
-  result: ScanResult;
-  csvResult?: CSVScanResult | null;
-}): void {
+export function downloadSummaryReport(params: SummaryReportParams): ExportResult {
   const { sourceName, sourceType, redactionMode, result, csvResult } = params;
   const generatedAt = new Date().toISOString();
 
@@ -101,5 +148,5 @@ export function downloadSummaryReport(params: {
   );
 
   const filename = `${getBaseFilename(sourceName)}-report.txt`;
-  triggerLocalBlobDownload(lines.join('\n'), filename, 'text/plain;charset=utf-8');
+  return triggerLocalBlobDownload(lines.join('\n'), filename, 'text/plain;charset=utf-8');
 }

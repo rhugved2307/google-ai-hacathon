@@ -1,4 +1,4 @@
-import type { ConfidenceLevel } from './types';
+import type { RegexValidationResult, ValidationCheck } from './types';
 
 /**
  * Known Indian UPI Payment Service Provider (PSP) handles.
@@ -147,10 +147,7 @@ export function isValidVerhoeff(numStr: string): boolean {
   return c === 0;
 }
 
-export function validateAadhaar(
-  raw: string,
-  hasAadhaarContext: boolean
-): { valid: boolean; confidence: ConfidenceLevel } {
+export function validateAadhaar(raw: string, hasAadhaarContext: boolean): ValidationCheck {
   const digits = raw.replace(/\D/g, '');
   if (digits.length !== 12) return { valid: false, confidence: 'low' };
   // Reject trivial all-identical digits (e.g. 000000000000)
@@ -172,10 +169,7 @@ export function validateAadhaar(
   return { valid: false, confidence: 'low' };
 }
 
-export function validatePAN(
-  raw: string,
-  hasPANContext: boolean
-): { valid: boolean; confidence: ConfidenceLevel } {
+export function validatePAN(raw: string, hasPANContext: boolean): ValidationCheck {
   const cleaned = raw.trim().toUpperCase();
   if (!/^[A-Z]{5}\d{4}[A-Z]$/.test(cleaned)) {
     return { valid: false, confidence: 'low' };
@@ -188,7 +182,7 @@ export function validatePAN(
   return { valid: true, confidence: 'medium' };
 }
 
-export function validateIndianPhone(raw: string): { valid: boolean; confidence: ConfidenceLevel } {
+export function validateIndianPhone(raw: string): ValidationCheck {
   const trimmed = raw.trim();
   const digits = trimmed.replace(/\D/g, '');
 
@@ -221,10 +215,7 @@ export function isValidIPv4(raw: string): boolean {
   return true;
 }
 
-export function validateUPI(
-  raw: string,
-  hasUPIContext: boolean
-): { valid: boolean; confidence: ConfidenceLevel } {
+export function validateUPI(raw: string, hasUPIContext: boolean): ValidationCheck {
   const trimmed = raw.trim().toLowerCase();
   const parts = trimmed.split('@');
   if (parts.length !== 2) return { valid: false, confidence: 'low' };
@@ -312,16 +303,11 @@ export function isValidDateString(raw: string): boolean {
   return false;
 }
 
-export function validatePassport(
-  raw: string,
-  hasPassportContext: boolean
-): { valid: boolean; confidence: ConfidenceLevel } {
+export function validatePassport(raw: string, hasPassportContext: boolean): ValidationCheck {
+  if (!hasPassportContext) return { valid: false, confidence: 'low' };
   const cleaned = raw.trim().toUpperCase();
-  // Indian passport: 1 letter (A-Z excluding Q, X, Z) followed by 7 digits, or general 1-2 letters + 6-8 digits
-  if (hasPassportContext && /^[A-Z]{1,2}\d{6,8}$/.test(cleaned)) {
-    return { valid: true, confidence: 'high' };
-  }
-  if (/^[A-PR-WY][1-9]\d{6}$/.test(cleaned) && hasPassportContext) {
+  // Indian passport (1 letter + 7 digits) or general 1-2 letters + 6-8 digits
+  if (/^[A-Z]{1,2}\d{6,8}$/.test(cleaned)) {
     return { valid: true, confidence: 'high' };
   }
   return { valid: false, confidence: 'low' };
@@ -341,7 +327,7 @@ export const MAX_CUSTOM_REGEX_LENGTH = 200;
 export function validateCustomRegexPattern(
   pattern: string,
   flags = 'g'
-): { valid: boolean; error?: string; safeFlags: string } {
+): RegexValidationResult {
   const trimmed = pattern.trim();
   const safeFlags = Array.from(new Set((flags + 'g').replace(/[^gimsu]/g, ''))).join('');
 

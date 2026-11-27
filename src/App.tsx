@@ -1,59 +1,49 @@
-import { Copy, ScanSearch, ShieldCheck, SlidersHorizontal } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { CSVAnalysis } from './components/CSVAnalysis';
 import { DetectionInsights } from './components/DetectionInsights';
-import { Navbar, type AppPage } from './components/Navbar';
-import {
-  HR_EXPORT_PRESET,
-  OverviewDashboard,
-  SUPPORT_LOG_PRESET,
-} from './components/OverviewDashboard';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { MobileActionBar } from './components/MobileActionBar';
+import { Navbar } from './components/Navbar';
+import { OverviewDashboard } from './components/OverviewDashboard';
 import { PrivacyModal } from './components/PrivacyModal';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { StatsCards } from './components/StatsCards';
-import { ToastStack, type ToastMessage } from './components/Toast';
+import { ToastStack } from './components/Toast';
 import { Workspace } from './components/Workspace';
-import { DEMO_CSV_SAMPLE, DEMO_TEXT_SAMPLE } from './engine/demoData';
-import type { PIICategory, UploadedFileInfo } from './engine/types';
+import { PRESET_DEFINITIONS } from './engine/demoData';
+import type {
+  AppPage,
+  CategoryFilter,
+  LeftViewMode,
+  MobileStudioTab,
+  PresetKey,
+  UploadedFileInfo,
+} from './engine/types';
 import { useScanner } from './hooks/useScanner';
 import { useTheme } from './hooks/useTheme';
+import { useToasts } from './hooks/useToasts';
 import { copyToClipboard } from './utils/clipboardUtils';
 import {
   downloadSanitizedCsv,
   downloadSanitizedTxt,
   downloadSummaryReport,
 } from './utils/downloadUtils';
+import { pluralize } from './utils/formatting';
 
 export default function App() {
   const { theme, toggleTheme } = useTheme();
   const scanner = useScanner();
+  const { toasts, statusAnnouncement, pushToast, dismissToast } = useToasts();
 
   const [activePage, setActivePage] = useState<AppPage>('overview');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [leftViewMode, setLeftViewMode] = useState<'edit' | 'highlight'>('edit');
-  const [mobileTab, setMobileTab] = useState<'original' | 'sanitized'>('original');
+  const [leftViewMode, setLeftViewMode] = useState<LeftViewMode>('edit');
+  const [mobileTab, setMobileTab] = useState<MobileStudioTab>('original');
   const [showHighlights, setShowHighlights] = useState<boolean>(true);
-  const [activeCategoryFilter, setActiveCategoryFilter] = useState<PIICategory | 'ALL'>('ALL');
+  const [activeCategoryFilter, setActiveCategoryFilter] = useState<CategoryFilter>('ALL');
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
   const [privacyModalOpen, setPrivacyModalOpen] = useState<boolean>(false);
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
-  const [statusAnnouncement, setStatusAnnouncement] = useState<string>('');
-
-  const pushToast = useCallback(
-    (type: ToastMessage['type'], title: string, description?: string) => {
-      const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-      setToasts((prev) => [...prev.slice(-3), { id, type, title, description }]);
-      setStatusAnnouncement(description ? `${title}. ${description}` : title);
-      window.setTimeout(() => {
-        setToasts((prev) => prev.filter((t) => t.id !== id));
-      }, 3600);
-    },
-    []
-  );
-
-  const dismissToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }, []);
 
   const handleScan = useCallback(() => {
     if (!scanner.rawText.trim()) {
@@ -61,19 +51,24 @@ export default function App() {
       return;
     }
     const result = scanner.executeScan();
-    if (result) {
-      setActiveCategoryFilter('ALL');
-      setLeftViewMode('highlight');
-      setShowHighlights(true);
-      setMobileTab('sanitized');
-      pushToast(
-        'success',
-        'Local scan complete',
-        result.stats.totalDetections > 0
-          ? `${result.stats.totalDetections} sensitive finding${result.stats.totalDetections === 1 ? '' : 's'} redacted across ${result.stats.uniqueCategories} categor${result.stats.uniqueCategories === 1 ? 'y' : 'ies'}.`
-          : 'No matching PII patterns were found in this input.'
-      );
+    if (!result) {
+      pushToast('error', 'Scan could not complete', 'Please verify the input and try again.');
+      return;
     }
+
+    setActiveCategoryFilter('ALL');
+    setLeftViewMode('highlight');
+    setShowHighlights(true);
+    setMobileTab('sanitized');
+    const findingsCount = result.stats.totalDetections;
+    const categoryCount = result.stats.uniqueCategories;
+    pushToast(
+      'success',
+      'Local scan complete',
+      findingsCount > 0
+        ? `${findingsCount} sensitive ${pluralize(findingsCount, 'finding')} redacted across ${categoryCount} ${pluralize(categoryCount, 'category', 'categories')}.`
+        : 'No matching PII patterns were found in this input.'
+    );
   }, [scanner, pushToast]);
 
   // Keyboard shortcut: Ctrl/Cmd + Enter triggers Scan & Sanitize in workspace view
@@ -103,48 +98,19 @@ export default function App() {
   }, []);
 
   const handleLoadAndScanPreset = useCallback(
-    (preset: 'demo-text' | 'demo-csv' | 'support-log' | 'hr-export') => {
-      let content = DEMO_TEXT_SAMPLE;
-      let fileInfo: UploadedFileInfo;
+    (preset: PresetKey) => {
+      const def = PRESET_DEFINITIONS[preset];
+      const fileInfo: UploadedFileInfo = {
+        name: def.filename,
+        size: new Blob([def.content]).size,
+        type: def.fileType,
+        lastModified: Date.now(),
+      };
 
-      if (preset === 'demo-csv') {
-        content = DEMO_CSV_SAMPLE;
-        fileInfo = {
-          name: 'customer-files-sample.csv',
-          size: new Blob([content]).size,
-          type: 'csv',
-          lastModified: Date.now(),
-        };
-      } else if (preset === 'support-log') {
-        content = SUPPORT_LOG_PRESET;
-        fileInfo = {
-          name: 'support-ticket-4821.log',
-          size: new Blob([content]).size,
-          type: 'txt',
-          lastModified: Date.now(),
-        };
-      } else if (preset === 'hr-export') {
-        content = HR_EXPORT_PRESET;
-        fileInfo = {
-          name: 'hr-onboarding-record.txt',
-          size: new Blob([content]).size,
-          type: 'txt',
-          lastModified: Date.now(),
-        };
-      } else {
-        content = DEMO_TEXT_SAMPLE;
-        fileInfo = {
-          name: 'customer-kyc-profile.txt',
-          size: new Blob([content]).size,
-          type: 'txt',
-          lastModified: Date.now(),
-        };
-      }
-
-      scanner.loadFile(content, fileInfo);
+      scanner.loadFile(def.content, fileInfo);
       const result = scanner.executeScan({
-        textOverride: content,
-        csvModeOverride: fileInfo.type === 'csv',
+        textOverride: def.content,
+        csvModeOverride: def.fileType === 'csv',
         fileOverride: fileInfo,
         selectedColsOverride: undefined,
       });
@@ -157,10 +123,11 @@ export default function App() {
       window.scrollTo({ top: 0, behavior: 'smooth' });
 
       if (result) {
+        const count = result.stats.totalDetections;
         pushToast(
           'success',
           `${fileInfo.name} scanned locally`,
-          `${result.stats.totalDetections} sensitive finding${result.stats.totalDetections === 1 ? '' : 's'} highlighted and sanitized on your device.`
+          `${count} sensitive ${pluralize(count, 'finding')} highlighted and sanitized on your device.`
         );
       }
     },
@@ -222,8 +189,7 @@ export default function App() {
   }, [scanner, pushToast]);
 
   const handleUndo = useCallback(() => {
-    const restored = scanner.undoLastAction();
-    if (restored) {
+    if (scanner.undoLastAction()) {
       pushToast('info', 'Action undone', 'Previous workspace state restored.');
     }
   }, [scanner, pushToast]);
@@ -250,20 +216,28 @@ export default function App() {
   const handleDownloadTxt = useCallback(() => {
     const output = scanner.scanResult?.sanitizedText ?? '';
     if (!output) return;
-    downloadSanitizedTxt(output, scanner.uploadedFile?.name);
-    pushToast('success', 'TXT downloaded', 'Sanitized text exported locally.');
+    const res = downloadSanitizedTxt(output, scanner.uploadedFile?.name);
+    if (res.success) {
+      pushToast('success', 'TXT downloaded', `${res.filename} exported locally.`);
+    } else {
+      pushToast('error', 'Export error', res.error);
+    }
   }, [scanner.scanResult, scanner.uploadedFile, pushToast]);
 
   const handleDownloadCsv = useCallback(() => {
     const output = scanner.csvResult?.sanitizedCSV ?? '';
     if (!output) return;
-    downloadSanitizedCsv(output, scanner.uploadedFile?.name);
-    pushToast('success', 'CSV downloaded', 'Sanitized CSV exported with structure intact.');
+    const res = downloadSanitizedCsv(output, scanner.uploadedFile?.name);
+    if (res.success) {
+      pushToast('success', 'CSV downloaded', `${res.filename} exported with structure intact.`);
+    } else {
+      pushToast('error', 'Export error', res.error);
+    }
   }, [scanner.csvResult, scanner.uploadedFile, pushToast]);
 
   const handleDownloadReport = useCallback(() => {
     if (!scanner.scanResult) return;
-    downloadSummaryReport({
+    const res = downloadSummaryReport({
       sourceName:
         scanner.uploadedFile?.name ||
         (scanner.isCSVMode ? 'sample-csv-data' : 'pasted-text'),
@@ -272,7 +246,11 @@ export default function App() {
       result: scanner.scanResult,
       csvResult: scanner.csvResult,
     });
-    pushToast('success', 'Summary report downloaded', 'Metrics only — zero raw PII exposed.');
+    if (res.success) {
+      pushToast('success', 'Summary report downloaded', 'Metrics only — zero raw PII exposed.');
+    } else {
+      pushToast('error', 'Export error', res.error);
+    }
   }, [scanner, pushToast]);
 
   const handleResetSettings = useCallback(() => {
@@ -338,117 +316,127 @@ export default function App() {
         }`}
       >
         {activePage === 'overview' ? (
-          <OverviewDashboard
-            hasScanned={scanner.hasScanned}
-            scanResult={scanner.scanResult}
-            csvResult={scanner.csvResult}
-            uploadedFile={scanner.uploadedFile}
-            sessionHistory={scanner.sessionHistory}
-            searchQuery={searchQuery}
-            onOpenWorkspace={handleOpenWorkspace}
-            onLoadAndScanPreset={handleLoadAndScanPreset}
-            onOpenSettings={() => setSettingsOpen(true)}
-            onResetSession={handleResetSession}
-          />
-        ) : (
-          <>
-            {/* Obsidian Document Studio & Floating Sanitized Viewer */}
-            <Workspace
-              rawText={scanner.rawText}
-              onChangeText={scanner.updateRawText}
-              uploadedFile={scanner.uploadedFile}
-              isCSVMode={scanner.isCSVMode}
-              onFileLoaded={handleFileLoaded}
-              onRemoveFile={handleRemoveFile}
-              onFileError={(msg) => pushToast('error', 'File error', msg)}
-              onScan={handleScan}
-              onClear={handleClearAll}
-              onLoadDemoText={handleLoadDemoText}
-              onLoadDemoCSV={handleLoadDemoCSV}
-              canUndo={scanner.canUndo}
-              onUndo={handleUndo}
-              liveScan={scanner.liveScan}
-              onToggleLiveScan={() => {
-                const next = !scanner.liveScan;
-                scanner.setLiveScan(next);
-                pushToast(
-                  'info',
-                  next ? 'Live Scan enabled' : 'Live Scan disabled',
-                  next
-                    ? 'Edits will automatically scan locally with debounce.'
-                    : 'Click Scan & Sanitize to scan manually.'
-                );
-              }}
-              isScanning={scanner.isScanning}
+          <ErrorBoundary sectionName="Security Overview" onReset={handleResetSession}>
+            <OverviewDashboard
               hasScanned={scanner.hasScanned}
               scanResult={scanner.scanResult}
-              leftViewMode={leftViewMode}
-              onChangeLeftViewMode={setLeftViewMode}
-              showHighlights={showHighlights}
-              onToggleHighlights={() => setShowHighlights((prev) => !prev)}
-              activeCategoryFilter={activeCategoryFilter}
-              onClearCategoryFilter={() => setActiveCategoryFilter('ALL')}
-              redactionMode={scanner.redactionMode}
-              onChangeRedactionMode={scanner.setRedactionMode}
-              customReplacements={scanner.customReplacements}
-              enabledCategories={scanner.enabledCategories}
-              customRules={scanner.customRules}
-              onCopyOriginal={handleCopyOriginal}
-              onCopySanitized={handleCopySanitized}
-              onDownloadTxt={handleDownloadTxt}
-              onDownloadCsv={handleDownloadCsv}
-              onDownloadReport={handleDownloadReport}
+              csvResult={scanner.csvResult}
+              uploadedFile={scanner.uploadedFile}
+              sessionHistory={scanner.sessionHistory}
+              searchQuery={searchQuery}
+              onOpenWorkspace={handleOpenWorkspace}
+              onLoadAndScanPreset={handleLoadAndScanPreset}
               onOpenSettings={() => setSettingsOpen(true)}
-              onOpenHelp={() => setPrivacyModalOpen(true)}
-              onBackToOverview={() => setActivePage('overview')}
-              mobileTab={mobileTab}
-              onChangeMobileTab={setMobileTab}
+              onResetSession={handleResetSession}
             />
+          </ErrorBoundary>
+        ) : (
+          <>
+            <ErrorBoundary sectionName="Document Studio" onReset={handleClearAll}>
+              <Workspace
+                rawText={scanner.rawText}
+                onChangeText={scanner.updateRawText}
+                uploadedFile={scanner.uploadedFile}
+                isCSVMode={scanner.isCSVMode}
+                onFileLoaded={handleFileLoaded}
+                onRemoveFile={handleRemoveFile}
+                onFileError={(msg) => pushToast('error', 'File error', msg)}
+                onScan={handleScan}
+                onClear={handleClearAll}
+                onLoadDemoText={handleLoadDemoText}
+                onLoadDemoCSV={handleLoadDemoCSV}
+                canUndo={scanner.canUndo}
+                onUndo={handleUndo}
+                liveScan={scanner.liveScan}
+                onToggleLiveScan={() => {
+                  const next = !scanner.liveScan;
+                  scanner.setLiveScan(next);
+                  pushToast(
+                    'info',
+                    next ? 'Live Scan enabled' : 'Live Scan disabled',
+                    next
+                      ? 'Edits will automatically scan locally with debounce.'
+                      : 'Click Scan & Sanitize to scan manually.'
+                  );
+                }}
+                isScanning={scanner.isScanning}
+                hasScanned={scanner.hasScanned}
+                scanResult={scanner.scanResult}
+                leftViewMode={leftViewMode}
+                onChangeLeftViewMode={setLeftViewMode}
+                showHighlights={showHighlights}
+                onToggleHighlights={() => setShowHighlights((prev) => !prev)}
+                activeCategoryFilter={activeCategoryFilter}
+                onClearCategoryFilter={() => setActiveCategoryFilter('ALL')}
+                redactionMode={scanner.redactionMode}
+                onChangeRedactionMode={scanner.setRedactionMode}
+                customReplacements={scanner.customReplacements}
+                enabledCategories={scanner.enabledCategories}
+                customRules={scanner.customRules}
+                onCopyOriginal={handleCopyOriginal}
+                onCopySanitized={handleCopySanitized}
+                onDownloadTxt={handleDownloadTxt}
+                onDownloadCsv={handleDownloadCsv}
+                onDownloadReport={handleDownloadReport}
+                onOpenSettings={() => setSettingsOpen(true)}
+                onOpenHelp={() => setPrivacyModalOpen(true)}
+                onBackToOverview={() => setActivePage('overview')}
+                mobileTab={mobileTab}
+                onChangeMobileTab={setMobileTab}
+              />
+            </ErrorBoundary>
 
-            {/* Detection Statistics Cards */}
             <StatsCards
               hasScanned={scanner.hasScanned}
               scanResult={scanner.scanResult}
               redactionMode={scanner.redactionMode}
             />
 
-            {/* CSV Analysis Interface (when CSV is scanned) */}
             {scanner.hasScanned && scanner.csvResult && (
-              <CSVAnalysis
-                csvResult={scanner.csvResult}
-                onToggleColumn={scanner.toggleCSVColumn}
-                onSanitizeAll={() => {
-                  scanner.sanitizeAllCSVColumns();
-                  pushToast('info', 'All CSV columns selected', 'Sanitized CSV updated.');
-                }}
-                onSelectOnlyPII={() => {
-                  scanner.selectOnlyPIICSVColumns();
-                  pushToast('info', 'Sensitive columns selected', 'Only PII columns will be redacted.');
-                }}
-                onExcludeAll={() => {
-                  scanner.excludeAllCSVColumns();
-                  pushToast('info', 'All CSV columns excluded', 'Original CSV values preserved.');
-                }}
-              />
+              <ErrorBoundary sectionName="CSV Analysis">
+                <CSVAnalysis
+                  csvResult={scanner.csvResult}
+                  onToggleColumn={scanner.toggleCSVColumn}
+                  onSanitizeAll={() => {
+                    scanner.sanitizeAllCSVColumns();
+                    pushToast('info', 'All CSV columns selected', 'Sanitized CSV updated.');
+                  }}
+                  onSelectOnlyPII={() => {
+                    scanner.selectOnlyPIICSVColumns();
+                    pushToast(
+                      'info',
+                      'Sensitive columns selected',
+                      'Only PII columns will be redacted.'
+                    );
+                  }}
+                  onExcludeAll={() => {
+                    scanner.excludeAllCSVColumns();
+                    pushToast('info', 'All CSV columns excluded', 'Original CSV values preserved.');
+                  }}
+                />
+              </ErrorBoundary>
             )}
 
-            {/* Detection Insights & Privacy-Safe Audit Log */}
             {scanner.hasScanned && scanner.scanResult && (
-              <DetectionInsights
-                scanResult={scanner.scanResult}
-                activeCategoryFilter={activeCategoryFilter}
-                onSelectCategoryFilter={(cat) => {
-                  setActiveCategoryFilter(cat);
-                  if (cat !== 'ALL') {
-                    setLeftViewMode('highlight');
-                    setShowHighlights(true);
-                  }
-                }}
-                isCSVMode={scanner.isCSVMode}
-              />
+              <ErrorBoundary
+                sectionName="Detection Insights"
+                onReset={() => setActiveCategoryFilter('ALL')}
+              >
+                <DetectionInsights
+                  scanResult={scanner.scanResult}
+                  activeCategoryFilter={activeCategoryFilter}
+                  onSelectCategoryFilter={(cat) => {
+                    setActiveCategoryFilter(cat);
+                    if (cat !== 'ALL') {
+                      setLeftViewMode('highlight');
+                      setShowHighlights(true);
+                    }
+                  }}
+                  isCSVMode={scanner.isCSVMode}
+                />
+              </ErrorBoundary>
             )}
 
-            {/* Clean Privacy Footer Strip */}
             <footer className="flex flex-col items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 text-xs text-slate-600 sm:flex-row sm:items-center dark:border-white/[0.06] dark:bg-[#131318] dark:text-[#94A3B8]">
               <div className="flex items-start gap-2.5 sm:items-center">
                 <ShieldCheck
@@ -475,44 +463,17 @@ export default function App() {
         )}
       </main>
 
-      {/* Mobile Sticky Bottom Action Bar (Workspace view) */}
       {activePage === 'workspace' && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-3 py-2.5 backdrop-blur-md lg:hidden dark:border-white/[0.06] dark:bg-[#0D0D12]/95">
-          <div className="mx-auto flex max-w-lg items-center gap-2">
-            <button
-              type="button"
-              onClick={handleScan}
-              disabled={!scanner.rawText.trim() || scanner.isScanning}
-              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#8B5CF6] to-[#6D28D9] px-4 text-xs font-semibold text-white shadow-sm shadow-[#8B5CF6]/25 disabled:opacity-45 whitespace-nowrap"
-            >
-              <ScanSearch className="h-4 w-4" aria-hidden="true" />
-              <span>{scanner.isScanning ? 'Scanning...' : 'Scan & Sanitize'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleCopySanitized}
-              disabled={!scanner.hasScanned || !scanner.scanResult?.sanitizedText}
-              aria-label="Copy sanitized output"
-              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-semibold text-slate-700 disabled:opacity-40 dark:border-white/[0.08] dark:bg-[#1C1C24] dark:text-[#F8FAFC]"
-            >
-              <Copy className="h-4 w-4" aria-hidden="true" />
-              <span>Copy</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setSettingsOpen(true)}
-              aria-label="Open redaction settings"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 dark:border-white/[0.08] dark:bg-[#1C1C24] dark:text-[#F8FAFC]"
-            >
-              <SlidersHorizontal className="h-4 w-4 text-[#8B5CF6] dark:text-[#A78BFA]" aria-hidden="true" />
-            </button>
-          </div>
-        </div>
+        <MobileActionBar
+          hasInput={Boolean(scanner.rawText.trim())}
+          isScanning={scanner.isScanning}
+          canCopySanitized={Boolean(scanner.hasScanned && scanner.scanResult?.sanitizedText)}
+          onScan={handleScan}
+          onCopySanitized={handleCopySanitized}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
       )}
 
-      {/* Slide-Over Redaction Settings Drawer */}
       <SettingsDrawer
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}

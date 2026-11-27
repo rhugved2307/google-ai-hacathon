@@ -1,13 +1,14 @@
 import { Filter, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { CATEGORY_META } from '../engine/patterns';
-import type { ConfidenceLevel, PIICategory, ScanResult } from '../engine/types';
+import type { CategoryFilter, ConfidenceFilter, ScanResult } from '../engine/types';
 import { getCategoryIcon } from '../utils/categoryIcons';
+import { getConfidenceTextClass, isConfidenceFilter } from '../utils/formatting';
 
 interface DetectionInsightsProps {
   scanResult: ScanResult;
-  activeCategoryFilter: PIICategory | 'ALL';
-  onSelectCategoryFilter: (cat: PIICategory | 'ALL') => void;
+  activeCategoryFilter: CategoryFilter;
+  onSelectCategoryFilter: (cat: CategoryFilter) => void;
   isCSVMode: boolean;
 }
 
@@ -17,7 +18,7 @@ export function DetectionInsights({
   onSelectCategoryFilter,
   isCSVMode,
 }: DetectionInsightsProps) {
-  const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceLevel | 'all'>('all');
+  const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   const { categoryStats, detections } = scanResult;
@@ -166,7 +167,11 @@ export function DetectionInsights({
               <select
                 aria-label="Filter by confidence"
                 value={confidenceFilter}
-                onChange={(e) => setConfidenceFilter(e.target.value as ConfidenceLevel | 'all')}
+                onChange={(e) => {
+                  if (isConfidenceFilter(e.target.value)) {
+                    setConfidenceFilter(e.target.value);
+                  }
+                }}
                 className="h-8 rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-700 focus:border-[#8B5CF6] focus:outline-none dark:border-white/[0.08] dark:bg-[#1E1E24] dark:text-[#F8FAFC]"
               >
                 <option value="all">All Confidence</option>
@@ -200,12 +205,7 @@ export function DetectionInsights({
               <tbody className="divide-y divide-slate-200/70 dark:divide-[#283449]/70">
                 {filteredDetections.slice(0, 250).map((det) => {
                   const meta = CATEGORY_META[det.type];
-                  const confColor =
-                    det.confidence === 'high'
-                      ? 'text-emerald-700 dark:text-[#34D399]'
-                      : det.confidence === 'medium'
-                        ? 'text-amber-700 dark:text-[#F59E0B]'
-                        : 'text-slate-500 dark:text-[#94A3B8]';
+                  const confColor = getConfidenceTextClass(det.confidence);
 
                   return (
                     <tr

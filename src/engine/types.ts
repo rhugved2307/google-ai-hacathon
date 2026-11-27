@@ -19,6 +19,55 @@ export type ConfidenceLevel = 'high' | 'medium' | 'low';
 
 export type RedactionMode = 'full' | 'partial' | 'custom';
 
+export type AppPage = 'overview' | 'workspace';
+
+export type SourceType = 'text' | 'txt' | 'csv';
+
+export type UploadedFileType = 'txt' | 'csv';
+
+export type PresetKey = 'demo-text' | 'demo-csv' | 'support-log' | 'hr-export';
+
+export type CategoryFilter = PIICategory | 'ALL';
+
+export type ConfidenceFilter = ConfidenceLevel | 'all';
+
+export type LeftViewMode = 'edit' | 'highlight';
+
+export type RightViewMode = 'sanitized' | 'compare';
+
+export type MobileStudioTab = 'original' | 'sanitized';
+
+export type CSVColumnStatus = 'Sanitized' | 'Excluded' | 'Clean';
+
+export interface ValidationCheck {
+  readonly valid: boolean;
+  readonly confidence: ConfidenceLevel;
+}
+
+export type RegexValidationResult =
+  | {
+      readonly valid: true;
+      readonly safeFlags: string;
+      readonly error?: undefined;
+    }
+  | {
+      readonly valid: false;
+      readonly error: string;
+      readonly safeFlags: string;
+    };
+
+export type CopyResult =
+  | { readonly success: true; readonly error?: undefined }
+  | { readonly success: false; readonly error: string };
+
+export type ExportResult =
+  | { readonly success: true; readonly filename: string; readonly error?: undefined }
+  | { readonly success: false; readonly filename?: undefined; readonly error: string };
+
+export type FileValidationResult =
+  | { readonly valid: true; readonly fileType: UploadedFileType; readonly error?: undefined }
+  | { readonly valid: false; readonly fileType?: undefined; readonly error: string };
+
 export interface Detection {
   id: string;
   type: PIICategory;
@@ -104,7 +153,7 @@ export interface CSVColumnSummary {
   detectedCount: number;
   categoryBreakdown: Partial<Record<PIICategory, number>>;
   selected: boolean;
-  status: 'Sanitized' | 'Excluded' | 'Clean';
+  status: CSVColumnStatus;
 }
 
 export interface CSVScanResult {
@@ -120,7 +169,7 @@ export interface CSVScanResult {
 export interface UploadedFileInfo {
   name: string;
   size: number;
-  type: 'txt' | 'csv';
+  type: UploadedFileType;
   lastModified: number;
 }
 
@@ -128,7 +177,7 @@ export interface SessionHistoryEntry {
   id: string;
   timestamp: string;
   sourceName: string;
-  sourceType: 'text' | 'txt' | 'csv';
+  sourceType: SourceType;
   redactionMode: RedactionMode;
   totalDetections: number;
   uniqueCategories: number;

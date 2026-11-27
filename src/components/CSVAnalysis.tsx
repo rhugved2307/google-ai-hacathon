@@ -1,15 +1,10 @@
-import {
-  CheckSquare,
-  FileSpreadsheet,
-  ShieldAlert,
-  ShieldCheck,
-  Square,
-  Table2,
-} from 'lucide-react';
+import { FileSpreadsheet, Table2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { parseCSV } from '../engine/csvParser';
-import { CATEGORY_META } from '../engine/patterns';
-import type { CSVScanResult, PIICategory } from '../engine/types';
+import type { CSVScanResult } from '../engine/types';
+import { ErrorBoundary } from './ErrorBoundary';
+import { CSVColumnsTable } from './csv/CSVColumnsTable';
+import { CSVPreviewTable } from './csv/CSVPreviewTable';
 
 interface CSVAnalysisProps {
   csvResult: CSVScanResult;
@@ -19,6 +14,8 @@ interface CSVAnalysisProps {
   onExcludeAll: () => void;
 }
 
+type CSVSubTab = 'columns' | 'preview';
+
 export function CSVAnalysis({
   csvResult,
   onToggleColumn,
@@ -26,13 +23,17 @@ export function CSVAnalysis({
   onSelectOnlyPII,
   onExcludeAll,
 }: CSVAnalysisProps) {
-  const [subTab, setSubTab] = useState<'columns' | 'preview'>('columns');
+  const [subTab, setSubTab] = useState<CSVSubTab>('columns');
   const { totalRows, totalColumns, columnsWithPII, columnSummaries, sanitizedCSV } = csvResult;
   const selectedCount = columnSummaries.filter((c) => c.selected).length;
 
   const previewParsed = useMemo(() => {
     if (subTab !== 'preview') return null;
-    return parseCSV(sanitizedCSV);
+    try {
+      return parseCSV(sanitizedCSV);
+    } catch {
+      return null;
+    }
   }, [subTab, sanitizedCSV]);
 
   return (
@@ -60,7 +61,6 @@ export function CSVAnalysis({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Columns vs Sanitized Table Preview toggle */}
           <div className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-100 p-0.5 dark:border-[#283449] dark:bg-[#0B1020]">
             <button
               type="button"
@@ -111,147 +111,15 @@ export function CSVAnalysis({
         </div>
       </div>
 
-      {/* Sub-view 1: Column Selection & Stats Table */}
-      {subTab === 'columns' && (
-        <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 dark:border-white/[0.08]">
-          <table className="w-full min-w-[600px] border-collapse text-left text-xs">
-            <thead className="bg-slate-50 text-[11px] font-semibold text-slate-600 dark:bg-[#191335] dark:text-[#A6AAB8]">
-              <tr className="border-b border-slate-200 dark:border-white/[0.08]">
-                <th scope="col" className="w-16 px-3.5 py-2.5">Sanitize</th>
-                <th scope="col" className="px-3.5 py-2.5">Column</th>
-                <th scope="col" className="px-3.5 py-2.5 text-right">Detected PII</th>
-                <th scope="col" className="px-3.5 py-2.5">Category Statistics</th>
-                <th scope="col" className="px-3.5 py-2.5 text-right">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200/70 dark:divide-[#283449]/70">
-              {columnSummaries.map((col) => {
-                const breakdownEntries = Object.entries(col.categoryBreakdown) as [
-                  PIICategory,
-                  number,
-                ][];
+      <ErrorBoundary sectionName="CSV Analysis Table" onReset={() => setSubTab('columns')}>
+        {subTab === 'columns' && (
+          <CSVColumnsTable columnSummaries={columnSummaries} onToggleColumn={onToggleColumn} />
+        )}
 
-                const statusColor =
-                  col.status === 'Sanitized'
-                    ? 'text-emerald-700 dark:text-[#34D399]'
-                    : col.status === 'Excluded'
-                      ? 'text-amber-700 dark:text-[#F59E0B]'
-                      : 'text-slate-500 dark:text-[#94A3B8]';
-
-                return (
-                  <tr
-                    key={`${col.index}-${col.name}`}
-                    className="transition-colors hover:bg-slate-50 dark:hover:bg-[#1B2540]/60"
-                  >
-                    <td className="px-3.5 py-2.5">
-                      <button
-                        type="button"
-                        onClick={() => onToggleColumn(col.index)}
-                        aria-label={`${col.selected ? 'Exclude' : 'Include'} column ${col.name}`}
-                        aria-pressed={col.selected}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-[#7C3AED] transition-colors hover:bg-[#8B5CF6]/12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8B5CF6] dark:text-[#A78BFA]"
-                      >
-                        {col.selected ? (
-                          <CheckSquare className="h-4 w-4" aria-hidden="true" />
-                        ) : (
-                          <Square className="h-4 w-4 text-slate-400" aria-hidden="true" />
-                        )}
-                      </button>
-                    </td>
-                    <td className="px-3.5 py-2.5 font-semibold text-slate-900 dark:text-[#F8FAFC]">
-                      <span className="mr-2 font-mono text-[11px] font-normal text-slate-400">
-                        #{col.index + 1}
-                      </span>
-                      {col.name}
-                    </td>
-                    <td className="px-3.5 py-2.5 text-right font-mono font-semibold tabular-nums text-slate-900 dark:text-[#F8FAFC]">
-                      {col.detectedCount.toLocaleString()}
-                    </td>
-                    <td className="px-3.5 py-2.5">
-                      {breakdownEntries.length === 0 ? (
-                        <span className="text-slate-400 dark:text-[#64748B]">Clean column</span>
-                      ) : (
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px]">
-                          {breakdownEntries.map(([cat, count]) => (
-                            <span key={cat} className={CATEGORY_META[cat].textClass}>
-                              {CATEGORY_META[cat].shortLabel} ({count})
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </td>
-                    <td
-                      className={`px-3.5 py-2.5 text-right font-semibold whitespace-nowrap ${statusColor}`}
-                    >
-                      <span className="inline-flex items-center justify-end gap-1">
-                        {col.status === 'Sanitized' ? (
-                          <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
-                        ) : col.status === 'Excluded' ? (
-                          <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />
-                        ) : null}
-                        <span>{col.status}</span>
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Sub-view 2: Sanitized Tabular Preview */}
-      {subTab === 'preview' && previewParsed && (
-        <div className="mt-4 space-y-2">
-          <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/[0.08]">
-            <table className="w-full min-w-[640px] border-collapse text-left font-mono text-xs">
-              <thead className="bg-slate-50 text-[11px] font-semibold text-slate-600 dark:bg-[#191335] dark:text-[#A6AAB8]">
-                <tr className="border-b border-slate-200 dark:border-white/[0.08]">
-                  <th scope="col" className="w-12 px-3 py-2.5">#</th>
-                  {previewParsed.headers.map((header, idx) => (
-                    <th key={`${idx}-${header}`} scope="col" className="px-3 py-2.5 whitespace-nowrap">
-                      {header}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200/70 dark:divide-[#283449]/70">
-                {previewParsed.rows.slice(0, 12).map((row, rowIdx) => (
-                  <tr
-                    key={`row-${rowIdx}`}
-                    className="hover:bg-slate-50 dark:hover:bg-[#1B2540]/50"
-                  >
-                    <td className="px-3 py-2 tabular-nums text-slate-400">{rowIdx + 1}</td>
-                    {row.map((cell, colIdx) => {
-                      const colMeta = columnSummaries[colIdx];
-                      const wasSanitized =
-                        colMeta && colMeta.selected && colMeta.detectedCount > 0;
-                      return (
-                        <td
-                          key={`cell-${rowIdx}-${colIdx}`}
-                          className={`max-w-[220px] truncate px-3 py-2 ${
-                            wasSanitized
-                              ? 'text-emerald-700 dark:text-[#34D399]'
-                              : 'text-slate-700 dark:text-[#F8FAFC]'
-                          }`}
-                          title={cell}
-                        >
-                          {cell}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {previewParsed.rows.length > 12 && (
-            <p className="text-right text-[11px] text-slate-500 dark:text-[#94A3B8]">
-              Previewing first 12 of {previewParsed.rows.length.toLocaleString()} sanitized rows.
-            </p>
-          )}
-        </div>
-      )}
+        {subTab === 'preview' && previewParsed && (
+          <CSVPreviewTable parsed={previewParsed} columnSummaries={columnSummaries} />
+        )}
+      </ErrorBoundary>
     </section>
   );
 }

@@ -1,10 +1,9 @@
 import { parseCSV, serializeCSV } from './csvParser';
 import { scanAndSanitizeText } from './detector';
-import { CATEGORY_META } from './patterns';
+import { buildCategoryStats } from './stats';
 import type {
   CSVColumnSummary,
   CSVScanResult,
-  CategoryStat,
   Detection,
   PIICategory,
   ScanOptions,
@@ -21,13 +20,37 @@ export function scanAndSanitizeCSV(
 ): CSVScanResult {
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
   const parsed = parseCSV(rawCSV);
-  const totalColumns = parsed.headers.length;
-  const totalRows = parsed.rows.length;
+  const maxRowWidth = parsed.rows.reduce((max, r) => Math.max(max, r.length), parsed.headers.length);
+  const effectiveHeaders =
+    maxRowWidth > parsed.headers.length
+      ? [
+          ...parsed.headers,
+          ...Array.from(
+            { length: maxRowWidth - parsed.headers.length },
+            (_, idx) => `Column ${parsed.headers.length + idx + 1}`
+          ),
+        ]
+      : parsed.headers;
+  const normalizedParsed =
+    effectiveHeaders === parsed.headers
+      ? parsed
+      : {
+          ...parsed,
+          headers: effectiveHeaders,
+          rows: parsed.rows.map((r) =>
+            r.length < maxRowWidth
+              ? [...r, ...Array<string>(maxRowWidth - r.length).fill('')]
+              : r
+          ),
+        };
+
+  const totalColumns = normalizedParsed.headers.length;
+  const totalRows = normalizedParsed.rows.length;
 
   const selectedSet = new Set<number>(
     selectedColumnIndices !== undefined
       ? selectedColumnIndices
-      : parsed.headers.map((_, idx) => idx)
+      : normalizedParsed.headers.map((_, idx) => idx)
   );
 
   const columnCounts = new Array<number>(totalColumns).fill(0);
@@ -44,12 +67,12 @@ export function scanAndSanitizeCSV(
   let detectionSeq = 0;
 
   for (let r = 0; r < totalRows; r++) {
-    const row = parsed.rows[r];
+    const row = normalizedParsed.rows[r] ?? [];
     const nextRow: string[] = [];
 
-    for (let c = 0; c < row.length; c++) {
+    for (let c = 0; c < totalColumns; c++) {
       const cell = row[c] ?? '';
-      const headerName = parsed.headers[c] ?? `Column ${c + 1}`;
+      const headerName = normalizedParsed.headers[c] ?? `Column ${c + 1}`;
       const isSelected = selectedSet.has(c);
 
       const cellScan = scanAndSanitizeText(cell, {
@@ -89,9 +112,9 @@ export function scanAndSanitizeCSV(
     sanitizedRows.push(nextRow);
   }
 
-  const sanitizedCSV = serializeCSV(parsed, sanitizedRows, { neutralizeFormulas: true });
+  const sanitizedCSV = serializeCSV(normalizedParsed, sanitizedRows, { neutralizeFormulas: true });
 
-  const columnSummaries: CSVColumnSummary[] = parsed.headers.map((name, index) => {
+  const columnSummaries: CSVColumnSummary[] = normalizedParsed.headers.map((name, index) => {
     const detectedCount = columnCounts[index] ?? 0;
     const selected = selectedSet.has(index);
     const status: CSVColumnSummary['status'] =
@@ -109,23 +132,12 @@ export function scanAndSanitizeCSV(
 
   const columnsWithPII = columnSummaries.filter((col) => col.detectedCount > 0).length;
   const totalDetections = allDetections.length;
-
-  const categoryStats: CategoryStat[] = (
-    Object.entries(aggregateCategoryCounts) as [PIICategory, number][]
-  )
-    .filter(([, count]) => count > 0)
-    .map(([category, count]) => ({
-      category,
-      label: CATEGORY_META[category].label,
-      count,
-      percentage: totalDetections > 0 ? Math.round((count / totalDetections) * 1000) / 10 : 0,
-    }))
-    .sort((a, b) => b.count - a.count);
+  const categoryStats = buildCategoryStats(aggregateCategoryCounts, totalDetections);
 
   const t1 = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
   return {
-    parsed,
+    parsed: normalizedParsed,
     sanitizedCSV,
     columnSummaries,
     totalRows,

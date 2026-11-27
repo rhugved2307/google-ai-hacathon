@@ -21,12 +21,21 @@ import {
   validatePAN,
   validateUPI,
 } from '../src/engine/validators';
+import { partialMaskValue, buildReplacement } from '../src/engine/redactor';
+import { copyToClipboard } from '../src/utils/clipboardUtils';
+import { downloadSanitizedCsv, downloadSanitizedTxt } from '../src/utils/downloadUtils';
 import {
   MAX_FILE_SIZE_BYTES,
   hasSuspiciousBinaryContent,
   readLocalFile,
   validateUploadedFile,
 } from '../src/utils/fileUtils';
+import {
+  computeRiskScore,
+  formatCategoryCountLabel,
+  getOutputFilename,
+  pluralizeCategoryLabel,
+} from '../src/utils/formatting';
 
 function makeOptions(overrides?: Partial<ScanOptions>): ScanOptions {
   return {
@@ -418,5 +427,70 @@ describe('G. Real Measured Performance Benchmarks', () => {
     assert.ok(csRes.ms < 150);
     assert.ok(cmRes.ms < 1000);
     assert.ok(clRes.ms < 5000);
+  });
+});
+
+describe('H. Hardened Edge Cases & Shared Formatting Utilities', () => {
+  it('handles malformed ragged CSV rows (wider & narrower than headers) and header-only CSV safely', () => {
+    const raggedCsv =
+      'Name,Email\nRahul Sharma,rahul@gmail.com,+91 9876543210\nPriya Deshmukh';
+    const out = scanAndSanitizeCSV(raggedCsv, makeOptions());
+    assert.equal(out.totalColumns, 3);
+    assert.equal(out.totalRows, 2);
+    assert.ok(!out.sanitizedCSV.includes('rahul@gmail.com'));
+    assert.ok(!out.sanitizedCSV.includes('9876543210'));
+
+    const headerOnly = scanAndSanitizeCSV('Name,Email\n', makeOptions());
+    assert.equal(headerOnly.totalColumns, 2);
+    assert.equal(headerOnly.totalRows, 0);
+    assert.equal(headerOnly.aggregateResult.stats.totalDetections, 0);
+  });
+
+  it('handles empty/edge-case redaction inputs without throwing', () => {
+    assert.equal(partialMaskValue('', 'EMAIL'), '[EMAIL]');
+    assert.equal(partialMaskValue('   ', 'PHONE'), '[PHONE]');
+    const fallback = buildReplacement(
+      'test@example.com',
+      'EMAIL',
+      'custom',
+      { ...getDefaultCustomReplacements(), EMAIL: '   ' }
+    );
+    assert.equal(fallback, '[EMAIL]');
+  });
+
+  it('pluralizes category labels, computes filenames, and scores risk accurately', () => {
+    assert.equal(pluralizeCategoryLabel('Email Address', 1), 'Email Address');
+    assert.equal(pluralizeCategoryLabel('Email Address', 4), 'Email Addresses');
+    assert.equal(pluralizeCategoryLabel('Date of Birth', 2), 'Dates of Birth');
+    assert.equal(pluralizeCategoryLabel('URL / Web Link', 3), 'URLs / Web Links');
+    assert.equal(formatCategoryCountLabel('EMAIL', 4), 'Email Addresses (4)');
+
+    assert.equal(getOutputFilename(null, false), 'sanitized-custom-input.txt');
+    assert.equal(getOutputFilename(null, true), 'sanitized-custom-input.csv');
+    assert.equal(
+      getOutputFilename(
+        { name: 'kyc.csv', size: 120, type: 'csv', lastModified: 1 },
+        true
+      ),
+      'sanitized-kyc.csv'
+    );
+
+    assert.equal(computeRiskScore(false, null), 21);
+    const cleanScan = scanAndSanitizeText('Hello world', makeOptions());
+    assert.equal(computeRiskScore(true, cleanScan), 0);
+  });
+
+  it('returns structured failure objects instead of throwing when clipboard or download APIs are unavailable', async () => {
+    const emptyCopy = await copyToClipboard('');
+    assert.equal(emptyCopy.success, false);
+    assert.ok(emptyCopy.error);
+
+    const txtRes = downloadSanitizedTxt('', undefined);
+    assert.equal(txtRes.success, false);
+    assert.ok(txtRes.error);
+
+    const csvRes = downloadSanitizedCsv('Name\n[PERSON]', 'test.csv');
+    assert.equal(csvRes.success, false);
+    assert.ok(csvRes.error);
   });
 });
