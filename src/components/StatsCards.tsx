@@ -57,6 +57,7 @@ export function StatsCards({ hasScanned, scanResult, redactionMode }: StatsCards
 
   return (
     <section
+      id="veltrix-stats"
       aria-label="Detection statistics"
       className="grid grid-cols-2 gap-3.5 lg:grid-cols-4"
     >
@@ -65,7 +66,7 @@ export function StatsCards({ hasScanned, scanResult, redactionMode }: StatsCards
         return (
           <div
             key={card.label}
-            className="rounded-2xl border border-slate-200 bg-white p-4 transition-colors hover:border-slate-300 dark:border-[#283449] dark:bg-[#141B2D] dark:hover:border-[#364662]"
+            className="rounded-2xl border border-slate-200 bg-white p-4 transition-colors hover:border-slate-300 dark:border-white/[0.06] dark:bg-[#131318] dark:hover:border-[#8B5CF6]/40"
           >
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs font-medium text-slate-500 dark:text-[#94A3B8]">

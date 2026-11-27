@@ -52,6 +52,8 @@ export function useScanner() {
   const [sessionHistory, setSessionHistory] = useState<SessionHistoryEntry[]>([]);
 
   const debounceRef = useRef<number | null>(null);
+  const scanFrameRef = useRef<number | null>(null);
+  const lastScanSignatureRef = useRef<string>('');
 
   const scanOptions: ScanOptions = useMemo(
     () => ({
@@ -61,6 +63,27 @@ export function useScanner() {
       customRules,
     }),
     [redactionMode, customReplacements, enabledCategories, customRules]
+  );
+
+  const buildScanSignature = useCallback(
+    (
+      text: string,
+      csvMode: boolean,
+      opts: ScanOptions,
+      cols: number[] | undefined
+    ): string =>
+      JSON.stringify({
+        len: text.length,
+        head: text.slice(0, 64),
+        tail: text.slice(-64),
+        csvMode,
+        mode: opts.redactionMode,
+        customReplacements: opts.customReplacements,
+        enabledCategories: opts.enabledCategories,
+        customRules: opts.customRules,
+        cols: cols ?? null,
+      }),
+    []
   );
 
   const recordHistory = useCallback(
@@ -132,31 +155,48 @@ export function useScanner() {
 
       setIsScanning(true);
 
-      let finalResult: ScanResult;
-      if (targetCsvMode) {
-        const csvOut = scanAndSanitizeCSV(targetText, scanOptions, targetCols);
-        setCsvResult(csvOut);
-        setScanResult(csvOut.aggregateResult);
-        if (targetCols === undefined) {
-          setSelectedCSVColumns(csvOut.columnSummaries.map((c) => c.index));
+      const runCompute = (): ScanResult => {
+        let finalResult: ScanResult;
+        let effectiveCols = targetCols;
+        if (targetCsvMode) {
+          const csvOut = scanAndSanitizeCSV(targetText, scanOptions, targetCols);
+          setCsvResult(csvOut);
+          setScanResult(csvOut.aggregateResult);
+          if (targetCols === undefined) {
+            effectiveCols = csvOut.columnSummaries.map((c) => c.index);
+            setSelectedCSVColumns(effectiveCols);
+          }
+          finalResult = csvOut.aggregateResult;
+        } else {
+          const textOut = scanAndSanitizeText(targetText, scanOptions);
+          setCsvResult(null);
+          setScanResult(textOut);
+          finalResult = textOut;
         }
-        finalResult = csvOut.aggregateResult;
-      } else {
-        const textOut = scanAndSanitizeText(targetText, scanOptions);
-        setCsvResult(null);
-        setScanResult(textOut);
-        finalResult = textOut;
+
+        lastScanSignatureRef.current = buildScanSignature(
+          targetText,
+          targetCsvMode,
+          scanOptions,
+          effectiveCols
+        );
+        setHasScanned(true);
+
+        if (params?.logHistory !== false) {
+          const sourceName =
+            targetFile?.name || (targetCsvMode ? 'Sample CSV Data' : 'Pasted Text');
+          const sourceType = targetFile?.type || (targetCsvMode ? 'csv' : 'text');
+          recordHistory(finalResult, sourceName, sourceType, scanOptions.redactionMode);
+        }
+        return finalResult;
+      };
+
+      const finalResult = runCompute();
+
+      if (scanFrameRef.current) {
+        window.clearTimeout(scanFrameRef.current);
       }
-
-      setHasScanned(true);
-
-      if (params?.logHistory !== false) {
-        const sourceName = targetFile?.name || (targetCsvMode ? 'Sample CSV Data' : 'Pasted Text');
-        const sourceType = targetFile?.type || (targetCsvMode ? 'csv' : 'text');
-        recordHistory(finalResult, sourceName, sourceType, scanOptions.redactionMode);
-      }
-
-      window.setTimeout(() => setIsScanning(false), 120);
+      scanFrameRef.current = window.setTimeout(() => setIsScanning(false), 120);
       return finalResult;
     },
     [
@@ -169,28 +209,40 @@ export function useScanner() {
       csvResult,
       scanOptions,
       recordHistory,
+      buildScanSignature,
     ]
   );
 
   // Immediately re-sanitize when redaction mode, custom replacements, enabled categories, custom rules, or CSV columns change after scanning
+  // Skips redundant scans when the exact same input + options signature was just scanned.
   useEffect(() => {
     if (!hasScanned || !rawText.trim()) return;
-    if (isCSVMode) {
-      const csvOut = scanAndSanitizeCSV(rawText, scanOptions, selectedCSVColumns);
-      setCsvResult(csvOut);
-      setScanResult(csvOut.aggregateResult);
-    } else {
-      const textOut = scanAndSanitizeText(rawText, scanOptions);
-      setCsvResult(null);
-      setScanResult(textOut);
+    const nextSignature = buildScanSignature(rawText, isCSVMode, scanOptions, selectedCSVColumns);
+    if (nextSignature === lastScanSignatureRef.current) return;
+
+    const performRescan = () => {
+      if (isCSVMode) {
+        const csvOut = scanAndSanitizeCSV(rawText, scanOptions, selectedCSVColumns);
+        setCsvResult(csvOut);
+        setScanResult(csvOut.aggregateResult);
+      } else {
+        const textOut = scanAndSanitizeText(rawText, scanOptions);
+        setCsvResult(null);
+        setScanResult(textOut);
+      }
+      lastScanSignatureRef.current = nextSignature;
+      setIsScanning(false);
+    };
+
+    // Yield a frame on large documents so loading indicator renders without freezing UI
+    if (rawText.length >= 40_000) {
+      setIsScanning(true);
+      const timer = window.setTimeout(performRescan, 0);
+      return () => window.clearTimeout(timer);
     }
-  }, [
-    hasScanned,
-    isCSVMode,
-    rawText,
-    scanOptions,
-    selectedCSVColumns,
-  ]);
+
+    performRescan();
+  }, [hasScanned, isCSVMode, rawText, scanOptions, selectedCSVColumns, buildScanSignature]);
 
   // Debounced live scanning when enabled
   useEffect(() => {
@@ -202,22 +254,34 @@ export function useScanner() {
       setScanResult(null);
       setCsvResult(null);
       setHasScanned(false);
+      lastScanSignatureRef.current = '';
       return;
     }
+    const nextSignature = buildScanSignature(rawText, isCSVMode, scanOptions, selectedCSVColumns);
+    if (hasScanned && nextSignature === lastScanSignatureRef.current) return;
+
     setIsScanning(true);
     debounceRef.current = window.setTimeout(() => {
+      let effectiveCols = selectedCSVColumns;
       if (isCSVMode) {
         const csvOut = scanAndSanitizeCSV(rawText, scanOptions, selectedCSVColumns);
         setCsvResult(csvOut);
         setScanResult(csvOut.aggregateResult);
         if (selectedCSVColumns === undefined) {
-          setSelectedCSVColumns(csvOut.columnSummaries.map((c) => c.index));
+          effectiveCols = csvOut.columnSummaries.map((c) => c.index);
+          setSelectedCSVColumns(effectiveCols);
         }
       } else {
         const textOut = scanAndSanitizeText(rawText, scanOptions);
         setCsvResult(null);
         setScanResult(textOut);
       }
+      lastScanSignatureRef.current = buildScanSignature(
+        rawText,
+        isCSVMode,
+        scanOptions,
+        effectiveCols
+      );
       setHasScanned(true);
       setIsScanning(false);
     }, 260);
@@ -227,7 +291,7 @@ export function useScanner() {
         window.clearTimeout(debounceRef.current);
       }
     };
-  }, [liveScan, rawText, isCSVMode, scanOptions, selectedCSVColumns]);
+  }, [liveScan, rawText, isCSVMode, scanOptions, selectedCSVColumns, hasScanned, buildScanSignature]);
 
   const updateRawText = useCallback(
     (nextText: string) => {
@@ -267,15 +331,8 @@ export function useScanner() {
   );
 
   const removeFile = useCallback(() => {
-    setUndoSnapshot({
-      rawText,
-      uploadedFile,
-      isCSVMode,
-      hasScanned,
-      scanResult,
-      csvResult,
-      selectedCSVColumns,
-    });
+    setUndoSnapshot(null);
+    lastScanSignatureRef.current = '';
     setUploadedFile(null);
     setRawText('');
     setIsCSVMode(false);
@@ -283,7 +340,7 @@ export function useScanner() {
     setHasScanned(false);
     setScanResult(null);
     setCsvResult(null);
-  }, [rawText, uploadedFile, isCSVMode, hasScanned, scanResult, csvResult, selectedCSVColumns]);
+  }, []);
 
   const loadDemoText = useCallback(() => {
     setUndoSnapshot({
@@ -330,23 +387,21 @@ export function useScanner() {
   }, [rawText, uploadedFile, isCSVMode, hasScanned, scanResult, csvResult, selectedCSVColumns]);
 
   const clearAll = useCallback(() => {
-    setUndoSnapshot({
-      rawText,
-      uploadedFile,
-      isCSVMode,
-      hasScanned,
-      scanResult,
-      csvResult,
-      selectedCSVColumns,
-    });
+    // Wipe all sensitive in-memory workspace state, including undo snapshots and session history
+    if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    if (scanFrameRef.current) window.clearTimeout(scanFrameRef.current);
+    lastScanSignatureRef.current = '';
+    setUndoSnapshot(null);
+    setSessionHistory([]);
     setRawText('');
     setUploadedFile(null);
     setIsCSVMode(false);
     setSelectedCSVColumns(undefined);
     setHasScanned(false);
+    setIsScanning(false);
     setScanResult(null);
     setCsvResult(null);
-  }, [rawText, uploadedFile, isCSVMode, hasScanned, scanResult, csvResult, selectedCSVColumns]);
+  }, []);
 
   const undoLastAction = useCallback(() => {
     if (!undoSnapshot) return false;

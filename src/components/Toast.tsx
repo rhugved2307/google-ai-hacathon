@@ -42,7 +42,9 @@ export function ToastStack({ toasts, onDismiss }: ToastStackProps) {
         return (
           <div
             key={toast.id}
-            className={`pointer-events-auto flex items-start gap-3 rounded-xl border ${borderClass} bg-white p-3.5 shadow-xl shadow-slate-900/15 dark:bg-[#1B2540] dark:shadow-black/50`}
+            role={toast.type === 'error' ? 'alert' : 'status'}
+            aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
+            className={`pointer-events-auto flex items-start gap-3 rounded-xl border ${borderClass} bg-white p-3.5 shadow-xl shadow-slate-900/15 dark:bg-[#191335] dark:shadow-black/50`}
           >
             <span className="mt-0.5">{icon}</span>
             <div className="min-w-0 flex-1">
@@ -59,7 +61,7 @@ export function ToastStack({ toasts, onDismiss }: ToastStackProps) {
               type="button"
               onClick={() => onDismiss(toast.id)}
               aria-label="Dismiss notification"
-              className="rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-[#141B2D] dark:hover:text-[#F8FAFC]"
+              className="rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/[0.08] dark:hover:text-[#F8FAFC]"
             >
               <X className="h-3.5 w-3.5" aria-hidden="true" />
             </button>

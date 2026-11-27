@@ -89,7 +89,7 @@ export function scanAndSanitizeCSV(
     sanitizedRows.push(nextRow);
   }
 
-  const sanitizedCSV = serializeCSV(parsed, sanitizedRows);
+  const sanitizedCSV = serializeCSV(parsed, sanitizedRows, { neutralizeFormulas: true });
 
   const columnSummaries: CSVColumnSummary[] = parsed.headers.map((name, index) => {
     const detectedCount = columnCounts[index] ?? 0;

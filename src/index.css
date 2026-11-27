@@ -3,6 +3,7 @@
 
 @theme {
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-serif: "Source Serif 4", Georgia, Cambria, "Times New Roman", serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
@@ -60,11 +61,72 @@
     linear-gradient(180deg, #12101d 0%, #16112b 55%, #110e20 100%);
 }
 
-/* Subtle ambient glow for workspace view */
+/* Subtle violet-obsidian studio backdrop matching Page 1 */
 @utility veltrix-ambient-bg {
   background-image:
-    radial-gradient(600px circle at 14% 0%, rgba(139, 92, 246, 0.12), transparent 65%),
-    radial-gradient(520px circle at 88% 4%, rgba(34, 211, 238, 0.06), transparent 65%);
+    radial-gradient(720px circle at 20% 0%, rgba(124, 92, 252, 0.14), transparent 62%),
+    radial-gradient(640px circle at 85% 14%, rgba(109, 40, 217, 0.1), transparent 60%);
+}
+
+/* Deep indigo-violet cipher preview backdrop matching Page 1 orb & overview tones */
+.veltrix-cipher-cover {
+  background:
+    radial-gradient(circle at 24% 58%, rgba(139, 92, 246, 0.34), transparent 54%),
+    radial-gradient(circle at 82% 28%, rgba(109, 40, 217, 0.28), transparent 58%),
+    linear-gradient(160deg, #1b1140 0%, #120c29 52%, #171033 100%);
+}
+
+/* Accessible keyboard focus indicator across interactive controls */
+@layer base {
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid #a78bfa;
+    outline-offset: 2px;
+  }
+}
+
+/* Global glossy bubble expansion on button hover */
+@media (hover: hover) and (pointer: fine) {
+  button:not(:disabled) {
+    transition:
+      transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1),
+      box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1),
+      border-radius 220ms cubic-bezier(0.16, 1, 0.3, 1),
+      background-color 180ms ease,
+      border-color 180ms ease,
+      color 180ms ease;
+  }
+
+  button:not(:disabled):not(.w-full):hover {
+    position: relative;
+    z-index: 5;
+    transform: translateY(-1px) scale(1.08);
+    border-radius: 9999px;
+    box-shadow:
+      0 8px 22px rgba(139, 92, 246, 0.34),
+      0 0 0 1px rgba(196, 181, 253, 0.45),
+      inset 0 2px 3px rgba(255, 255, 255, 0.38),
+      inset 0 -4px 10px rgba(76, 29, 149, 0.28);
+  }
+
+  button.w-full:not(:disabled):hover {
+    position: relative;
+    z-index: 5;
+    transform: translateY(-2px) scale(1.018);
+    box-shadow:
+      0 12px 28px rgba(139, 92, 246, 0.28),
+      0 0 0 1px rgba(196, 181, 253, 0.35),
+      inset 0 1.5px 3px rgba(255, 255, 255, 0.25),
+      inset 0 -4px 12px rgba(76, 29, 149, 0.22);
+  }
+
+  button:not(:disabled):active {
+    transform: scale(0.97);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

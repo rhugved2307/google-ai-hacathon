@@ -17,17 +17,42 @@ export function formatBytes(bytes: number): string {
   return `${mb.toFixed(2)} MB`;
 }
 
+export function hasSuspiciousBinaryContent(content: string): boolean {
+  if (content.includes('\0')) return true;
+  const sampleLen = Math.min(content.length, 4096);
+  if (sampleLen === 0) return false;
+  let controlCount = 0;
+  for (let i = 0; i < sampleLen; i++) {
+    const code = content.charCodeAt(i);
+    if (code < 32 && code !== 9 && code !== 10 && code !== 13) {
+      controlCount += 1;
+    }
+  }
+  return controlCount / sampleLen > 0.02;
+}
+
 export function validateUploadedFile(file: File): FileValidationResult {
   if (!file) {
     return { valid: false, error: 'No file was provided.' };
   }
 
-  const lowerName = file.name.toLowerCase();
-  const isTxt = lowerName.endsWith('.txt') || file.type === 'text/plain';
+  const lowerName = file.name.trim().toLowerCase();
+  const hasDot = lowerName.includes('.');
+  const isTxtExt = lowerName.endsWith('.txt');
+  const isCsvExt = lowerName.endsWith('.csv');
+
+  // If the file has an explicit extension, strictly require .txt or .csv (prevents spoofed MIME on .html/.exe/.svg)
+  if (hasDot && !isTxtExt && !isCsvExt) {
+    return {
+      valid: false,
+      error: 'Unsupported file format. Please upload a .txt or .csv file.',
+    };
+  }
+
+  const isTxt = isTxtExt || (!hasDot && file.type === 'text/plain');
   const isCsv =
-    lowerName.endsWith('.csv') ||
-    file.type === 'text/csv' ||
-    file.type === 'application/vnd.ms-excel';
+    isCsvExt ||
+    (!hasDot && (file.type === 'text/csv' || file.type === 'application/vnd.ms-excel'));
 
   if (!isTxt && !isCsv) {
     return {
@@ -52,7 +77,7 @@ export function validateUploadedFile(file: File): FileValidationResult {
 
   return {
     valid: true,
-    fileType: lowerName.endsWith('.csv') || (!lowerName.endsWith('.txt') && isCsv) ? 'csv' : 'txt',
+    fileType: isCsv ? 'csv' : 'txt',
   };
 }
 
@@ -68,6 +93,11 @@ export async function readLocalFile(file: File): Promise<{
   const content = await file.text();
   if (!content.trim()) {
     throw new Error('The uploaded file contains only whitespace.');
+  }
+  if (hasSuspiciousBinaryContent(content)) {
+    throw new Error(
+      'The file appears to contain binary or corrupted data. Please upload a valid plain-text .txt or .csv file.'
+    );
   }
 
   return {

@@ -297,23 +297,86 @@ function normalizeHint(contextHint?: string): string {
   return (contextHint ?? '').toLowerCase();
 }
 
+// Pre-compiled module-level regular expressions avoid repeated allocations during large text & CSV scans
+const RE_URL = /\bhttps?:\/\/[^\s<>"'`)\]},;]+/gi;
+const RE_EMAIL = /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}\b/g;
+const RE_UPI = /\b[a-zA-Z0-9._-]{2,64}@[a-zA-Z][a-zA-Z0-9]{1,30}\b(?!\.[a-zA-Z])/g;
+const RE_UPI_CTX = /\b(upi|vpa|payment\s*id|bhim|gpay|phonepe|paytm)\b/;
+const RE_UPI_HINT = /\b(upi|vpa)\b/;
+
+const RE_CARD = /(?<!\d)(?:\d[ -]?){13,19}(?!\d)/g;
+const RE_CARD_CTX = /\b(card|credit|debit|visa|mastercard|rupay|amex|cvv|pan\s*card)\b/;
+const RE_CARD_HINT = /\b(card|credit|debit)\b/;
+
+const RE_BANK = /(?<!\d)\d{9,18}(?!\d)/g;
+const RE_BANK_CTX =
+  /\b(bank\s*account|account\s*(?:no|num|number|#)|a\/c\s*(?:no|num|number)?|acct\s*(?:no|num|number)?|savings\s*account|current\s*account|iban)\b/;
+const RE_BANK_HINT = /\b(bank|account|a\/c|acct)\b/;
+
+const RE_AADHAAR =
+  /(?<!\d)(?<!\d{4}[\s-])(?:\d{4}[\s-]\d{4}[\s-]\d{4}|\d{12})(?![\s-]\d{4})(?!\d)/g;
+const RE_BANK_OR_CARD_CTX =
+  /\b(bank\s*account|account\s*(?:no|num|number|#)|a\/c|acct|credit\s*card|debit\s*card|card\s*(?:no|num|number)?)\b/;
+const RE_BANK_OR_CARD_HINT = /\b(bank|account|a\/c|acct|card|credit|debit)\b/;
+const RE_AADHAAR_CTX = /\b(aadhaar|aadhar|uid|uidai)\b/;
+const RE_AADHAAR_HINT = /\b(aadhaar|aadhar|uid)\b/;
+
+const RE_PAN = /\b[A-Z]{5}\d{4}[A-Z]\b/g;
+const RE_PAN_CTX = /\b(pan|permanent\s*account|tax\s*id|income\s*tax)\b/;
+const RE_PAN_HINT = /\bpan\b/;
+
+const RE_PASSPORT = /\b[A-Z]{1,2}\d{6,8}\b/g;
+const RE_PASSPORT_CTX = /\b(passport|travel\s*doc|passport\s*(?:no|num|number|id))\b/;
+const RE_PASSPORT_HINT = /\bpassport\b/;
+
+const RE_PHONE = /(?<!\d)(?:\+91[\s-]?|0)?[6-9]\d{4}[\s-]?\d{5}(?!\d)/g;
+const RE_IPV4 = /(?<![.\d])(?:\d{1,3}\.){3}\d{1,3}(?![.\d])/g;
+
+const RE_DOB =
+  /\b(?:\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{4}|\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{4}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4})\b/gi;
+const RE_DOB_CTX = /\b(dob|d\.o\.b|date\s*of\s*birth|birth\s*date|born|birthday)\b/;
+const RE_DOB_HINT = /\b(dob|birth|born)\b/;
+
+const RE_PIN = /(?<!\d)[1-9]\d{5}(?!\d)/g;
+const RE_PIN_CTX = /\b(pin\s*code|pincode|postal\s*code|zip\s*code|zip|pin\s*[:#-])\b/;
+const RE_PIN_HINT = /\b(pin|pincode|postal|zip)\b/;
+
+const RE_PERSON_LABEL =
+  /\b(?:Full\s*Name|Customer\s*Name|Client\s*Name|Employee\s*Name|Patient\s*Name|Account\s*Holder|Contact\s*Person|Applicant|Customer|Client|Name|Employee|User)\s*[:=-]\s*([A-Z][a-z]{1,24}(?:\s+[A-Z][a-z]{1,24}){0,3})/g;
+const RE_PERSON_NON_NAME = /^(Information|Details|Summary|Unknown|None|Redacted)$/i;
+const RE_PERSON_HONORIFIC =
+  /\b(?:Mr|Mrs|Ms|Miss|Dr|Prof|Shri|Smt)\.?\s+([A-Z][a-z]{1,24}(?:\s+[A-Z][a-z]{1,24}){1,2})\b/g;
+const RE_PERSON_HINT_POS =
+  /\b(name|customer|client|employee|patient|person|applicant|holder|contact)\b/;
+const RE_PERSON_HINT_NEG = /\b(company|city|file|product|org|organization|bank|street|road)\b/;
+const RE_PERSON_BARE = /^[A-Z][a-zA-Z'.-]{1,24}(?:\s+[A-Z][a-zA-Z'.-]{1,24}){0,3}$/;
+const RE_PERSON_BARE_EXCL = /^(Unknown|None|N\/A|Null|True|False)$/i;
+
+const RE_ADDRESS_LABEL =
+  /\b(?:Permanent\s*Address|Residential\s*Address|Home\s*Address|Billing\s*Address|Shipping\s*Address|Mailing\s*Address|Address|Addr)\s*[:=-]\s*([^\n\r]{6,140})/gi;
+const RE_ADDRESS_STREET =
+  /\b(?:(?:Flat|Apt|Apartment|Plot|House|Room|Suite|Block|Sector|Shop|Unit)\s*(?:No\.?\s*)?[A-Z0-9/-]{1,8},?\s+[A-Za-z0-9.\s'-]{2,45}(?:Apartments?|Residency|Heights|Towers?|Enclave|Society|Complex|Villas?|Park|Colony|Nagar|Layout|Phase|Road|Rd|Street|St|Avenue|Ave|Lane|Ln|Marg|Boulevard|Blvd|Drive|Dr)|(?:\d{1,5}[A-Z]?\s+(?:[A-Za-z0-9.'-]+\s+){1,4}(?:Road|Rd|Street|St|Avenue|Ave|Lane|Ln|Marg|Cross|Main|Boulevard|Blvd|Drive|Dr|Nagar|Colony|Park|Enclave|Layout|Sector|Phase)))(?:,\s*[A-Za-z\s.-]{2,30}){0,3}/gi;
+const RE_ADDRESS_HINT = /\b(address|addr|street|residence|location)\b/;
+
 /**
  * Extracts all candidate PII matches from a text string before overlap resolution.
  */
 export function extractBuiltInCandidates(
   text: string,
-  contextHint?: string
+  contextHint?: string,
+  enabledCategories?: Partial<Record<PIICategory, boolean>>
 ): CandidateMatch[] {
   const candidates: CandidateMatch[] = [];
   const hint = normalizeHint(contextHint);
+  const isEnabled = (cat: PIICategory) =>
+    !enabledCategories || enabledCategories[cat] !== false;
 
   // 1. URLs (http:// or https://)
-  {
-    const regex = /\bhttps?:\/\/[^\s<>"'`)\]},;]+/gi;
+  if (isEnabled('URL') && (text.includes('http://') || text.includes('https://') || /https?:\/\//i.test(text))) {
+    RE_URL.lastIndex = 0;
     let m: RegExpExecArray | null;
-    while ((m = regex.exec(text)) !== null) {
+    while ((m = RE_URL.exec(text)) !== null) {
       let raw = m[0];
-      // Trim trailing sentence punctuation
       while (/[.,!?:;)]$/.test(raw)) {
         raw = raw.slice(0, -1);
       }
@@ -330,11 +393,13 @@ export function extractBuiltInCandidates(
     }
   }
 
+  const hasAtSymbol = text.includes('@');
+
   // 2. Email addresses (requires a dot TLD after @)
-  {
-    const regex = /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}\b/g;
+  if (isEnabled('EMAIL') && hasAtSymbol) {
+    RE_EMAIL.lastIndex = 0;
     let m: RegExpExecArray | null;
-    while ((m = regex.exec(text)) !== null) {
+    while ((m = RE_EMAIL.exec(text)) !== null) {
       candidates.push({
         type: 'EMAIL',
         ruleName: 'RFC-Style Email Pattern',
@@ -347,14 +412,12 @@ export function extractBuiltInCandidates(
   }
 
   // 3. UPI IDs (no dot after @, known PSP handle or UPI context)
-  {
-    const regex = /\b[a-zA-Z0-9._-]{2,64}@[a-zA-Z][a-zA-Z0-9]{1,30}\b(?!\.[a-zA-Z])/g;
+  if (isEnabled('UPI') && hasAtSymbol) {
+    RE_UPI.lastIndex = 0;
     let m: RegExpExecArray | null;
-    while ((m = regex.exec(text)) !== null) {
+    while ((m = RE_UPI.exec(text)) !== null) {
       const preceding = getPrecedingContext(text, m.index).toLowerCase();
-      const hasUPIContext =
-        /\b(upi|vpa|payment\s*id|bhim|gpay|phonepe|paytm)\b/.test(preceding) ||
-        /\b(upi|vpa)\b/.test(hint);
+      const hasUPIContext = RE_UPI_CTX.test(preceding) || RE_UPI_HINT.test(hint);
       const check = validateUPI(m[0], hasUPIContext);
       if (check.valid) {
         candidates.push({
@@ -369,22 +432,21 @@ export function extractBuiltInCandidates(
     }
   }
 
+  const hasDigit = /\d/.test(text);
+
   // 4. Credit / Debit Card Numbers (Luhn-validated)
-  {
-    const regex = /(?<!\d)(?:\d[ -]?){13,19}(?!\d)/g;
+  if (isEnabled('CARD') && hasDigit) {
+    RE_CARD.lastIndex = 0;
     let m: RegExpExecArray | null;
-    while ((m = regex.exec(text)) !== null) {
+    while ((m = RE_CARD.exec(text)) !== null) {
       const raw = m[0].trim();
       const startOffset = m.index + m[0].indexOf(raw);
       const digits = raw.replace(/\D/g, '');
       if (digits.length < 13 || digits.length > 19) continue;
-      // Avoid matching spaced dates or multiple numbers separated by extra spaces
       if (/\s{2,}/.test(raw)) continue;
 
       const preceding = getPrecedingContext(text, startOffset).toLowerCase();
-      const hasCardContext =
-        /\b(card|credit|debit|visa|mastercard|rupay|amex|cvv|pan\s*card)\b/.test(preceding) ||
-        /\b(card|credit|debit)\b/.test(hint);
+      const hasCardContext = RE_CARD_CTX.test(preceding) || RE_CARD_HINT.test(hint);
 
       if (isValidLuhn(raw) && (hasKnownCardPrefix(raw) || hasCardContext)) {
         candidates.push({
@@ -400,15 +462,12 @@ export function extractBuiltInCandidates(
   }
 
   // 5. Bank Account Numbers (contextual — prioritized over Aadhaar when bank context is present)
-  {
-    const regex = /(?<!\d)\d{9,18}(?!\d)/g;
+  if (isEnabled('BANK_ACCOUNT') && hasDigit) {
+    RE_BANK.lastIndex = 0;
     let m: RegExpExecArray | null;
-    while ((m = regex.exec(text)) !== null) {
+    while ((m = RE_BANK.exec(text)) !== null) {
       const preceding = getPrecedingContext(text, m.index, 60).toLowerCase();
-      const hasBankContext =
-        /\b(bank\s*account|account\s*(?:no|num|number|#)|a\/c\s*(?:no|num|number)?|acct\s*(?:no|num|number)?|savings\s*account|current\s*account|iban)\b/.test(
-          preceding
-        ) || /\b(bank|account|a\/c|acct)\b/.test(hint);
+      const hasBankContext = RE_BANK_CTX.test(preceding) || RE_BANK_HINT.test(hint);
 
       if (hasBankContext) {
         candidates.push({
@@ -417,27 +476,23 @@ export function extractBuiltInCandidates(
           start: m.index,
           end: m.index + m[0].length,
           confidence: 'high',
-          priority: CATEGORY_META.BANK_ACCOUNT.priority + 2, // Higher than Aadhaar when bank context is explicit
+          priority: CATEGORY_META.BANK_ACCOUNT.priority + 2,
         });
       }
     }
   }
 
   // 6. Aadhaar Numbers (12 digits with grouping or Aadhaar context)
-  {
-    const regex = /(?<!\d)(?<!\d{4}[\s-])(?:\d{4}[\s-]\d{4}[\s-]\d{4}|\d{12})(?![\s-]\d{4})(?!\d)/g;
+  if (isEnabled('AADHAAR') && hasDigit) {
+    RE_AADHAAR.lastIndex = 0;
     let m: RegExpExecArray | null;
-    while ((m = regex.exec(text)) !== null) {
+    while ((m = RE_AADHAAR.exec(text)) !== null) {
       const preceding = getPrecedingContext(text, m.index, 52).toLowerCase();
       const hasBankOrCardContext =
-        /\b(bank\s*account|account\s*(?:no|num|number|#)|a\/c|acct|credit\s*card|debit\s*card|card\s*(?:no|num|number)?)\b/.test(
-          preceding
-        ) || /\b(bank|account|a\/c|acct|card|credit|debit)\b/.test(hint);
+        RE_BANK_OR_CARD_CTX.test(preceding) || RE_BANK_OR_CARD_HINT.test(hint);
       if (hasBankOrCardContext) continue;
 
-      const hasAadhaarContext =
-        /\b(aadhaar|aadhar|uid|uidai)\b/.test(preceding) ||
-        /\b(aadhaar|aadhar|uid)\b/.test(hint);
+      const hasAadhaarContext = RE_AADHAAR_CTX.test(preceding) || RE_AADHAAR_HINT.test(hint);
 
       const check = validateAadhaar(m[0], hasAadhaarContext);
       if (check.valid) {
@@ -456,14 +511,12 @@ export function extractBuiltInCandidates(
   }
 
   // 7. PAN Numbers (ABCDE1234F)
-  {
-    const regex = /\b[A-Z]{5}\d{4}[A-Z]\b/g;
+  if (isEnabled('PAN') && hasDigit) {
+    RE_PAN.lastIndex = 0;
     let m: RegExpExecArray | null;
-    while ((m = regex.exec(text)) !== null) {
+    while ((m = RE_PAN.exec(text)) !== null) {
       const preceding = getPrecedingContext(text, m.index).toLowerCase();
-      const hasPANContext =
-        /\b(pan|permanent\s*account|tax\s*id|income\s*tax)\b/.test(preceding) ||
-        /\bpan\b/.test(hint);
+      const hasPANContext = RE_PAN_CTX.test(preceding) || RE_PAN_HINT.test(hint);
       const check = validatePAN(m[0], hasPANContext);
       if (check.valid) {
         candidates.push({
@@ -479,14 +532,12 @@ export function extractBuiltInCandidates(
   }
 
   // 8. Passport Identifiers (with context)
-  {
-    const regex = /\b[A-Z]{1,2}\d{6,8}\b/g;
+  if (isEnabled('PASSPORT') && hasDigit) {
+    RE_PASSPORT.lastIndex = 0;
     let m: RegExpExecArray | null;
-    while ((m = regex.exec(text)) !== null) {
+    while ((m = RE_PASSPORT.exec(text)) !== null) {
       const preceding = getPrecedingContext(text, m.index).toLowerCase();
-      const hasPassportContext =
-        /\b(passport|travel\s*doc|passport\s*(?:no|num|number|id))\b/.test(preceding) ||
-        /\bpassport\b/.test(hint);
+      const hasPassportContext = RE_PASSPORT_CTX.test(preceding) || RE_PASSPORT_HINT.test(hint);
       const check = validatePassport(m[0], hasPassportContext);
       if (check.valid) {
         candidates.push({
@@ -502,11 +553,10 @@ export function extractBuiltInCandidates(
   }
 
   // 9. Indian Phone Numbers
-  {
-    const regex = /(?<!\d)(?:\+91[\s-]?|0)?[6-9]\d{4}[\s-]?\d{5}(?!\d)/g;
+  if (isEnabled('PHONE') && hasDigit) {
+    RE_PHONE.lastIndex = 0;
     let m: RegExpExecArray | null;
-    while ((m = regex.exec(text)) !== null) {
-      // Skip if immediately followed by @ (likely a UPI ID like 9876543210@paytm)
+    while ((m = RE_PHONE.exec(text)) !== null) {
       const nextChar = text[m.index + m[0].length];
       if (nextChar === '@') continue;
 
@@ -525,11 +575,10 @@ export function extractBuiltInCandidates(
   }
 
   // 10. IPv4 Addresses
-  {
-    const regex = /(?<![.\d])(?:\d{1,3}\.){3}\d{1,3}(?![.\d])/g;
+  if (isEnabled('IP_ADDRESS') && hasDigit && text.includes('.')) {
+    RE_IPV4.lastIndex = 0;
     let m: RegExpExecArray | null;
-    while ((m = regex.exec(text)) !== null) {
-      // Avoid version strings like v1.2.3.4
+    while ((m = RE_IPV4.exec(text)) !== null) {
       const prevChar = m.index > 0 ? text[m.index - 1] : '';
       if (prevChar === 'v' || prevChar === 'V') continue;
       if (isValidIPv4(m[0])) {
@@ -546,15 +595,12 @@ export function extractBuiltInCandidates(
   }
 
   // 11. Dates of Birth (requires DOB context or DOB CSV column)
-  {
-    const regex =
-      /\b(?:\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{4}|\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{4}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4})\b/gi;
+  if (isEnabled('DOB') && hasDigit) {
+    RE_DOB.lastIndex = 0;
     let m: RegExpExecArray | null;
-    while ((m = regex.exec(text)) !== null) {
+    while ((m = RE_DOB.exec(text)) !== null) {
       const preceding = getPrecedingContext(text, m.index, 52).toLowerCase();
-      const hasDOBContext =
-        /\b(dob|d\.o\.b|date\s*of\s*birth|birth\s*date|born|birthday)\b/.test(preceding) ||
-        /\b(dob|birth|born)\b/.test(hint);
+      const hasDOBContext = RE_DOB_CTX.test(preceding) || RE_DOB_HINT.test(hint);
 
       if (hasDOBContext && isValidDateString(m[0])) {
         candidates.push({
@@ -570,14 +616,12 @@ export function extractBuiltInCandidates(
   }
 
   // 12. PIN Codes (Indian 6-digit postal code with context)
-  {
-    const regex = /(?<!\d)[1-9]\d{5}(?!\d)/g;
+  if (isEnabled('PIN_CODE') && hasDigit) {
+    RE_PIN.lastIndex = 0;
     let m: RegExpExecArray | null;
-    while ((m = regex.exec(text)) !== null) {
+    while ((m = RE_PIN.exec(text)) !== null) {
       const preceding = getPrecedingContext(text, m.index, 48).toLowerCase();
-      const hasPinContext =
-        /\b(pin\s*code|pincode|postal\s*code|zip\s*code|zip|pin\s*[:#-])\b/.test(preceding) ||
-        /\b(pin|pincode|postal|zip)\b/.test(hint);
+      const hasPinContext = RE_PIN_CTX.test(preceding) || RE_PIN_HINT.test(hint);
 
       if (hasPinContext && isValidIndianPinCode(m[0])) {
         candidates.push({
@@ -593,17 +637,14 @@ export function extractBuiltInCandidates(
   }
 
   // 13. Person Names (contextual labels, honorific prefixes, or CSV name column)
-  {
-    // Pattern A: Labelled names ("Name: Rahul Sharma", "Customer: Priya Deshmukh", "Employee: ...")
-    const labelRegex =
-      /\b(?:Full\s*Name|Customer\s*Name|Client\s*Name|Employee\s*Name|Patient\s*Name|Account\s*Holder|Contact\s*Person|Applicant|Customer|Client|Name|Employee|User)\s*[:=-]\s*([A-Z][a-z]{1,24}(?:\s+[A-Z][a-z]{1,24}){0,3})/g;
+  if (isEnabled('PERSON')) {
+    RE_PERSON_LABEL.lastIndex = 0;
     let m: RegExpExecArray | null;
-    while ((m = labelRegex.exec(text)) !== null) {
+    while ((m = RE_PERSON_LABEL.exec(text)) !== null) {
       const fullMatch = m[0];
       const nameVal = m[1].trim();
       if (nameVal.length < 2) continue;
-      // Avoid matching generic non-name headers
-      if (/^(Information|Details|Summary|Unknown|None|Redacted)$/i.test(nameVal)) continue;
+      if (RE_PERSON_NON_NAME.test(nameVal)) continue;
       const offsetInMatch = fullMatch.lastIndexOf(nameVal);
       const start = m.index + offsetInMatch;
       candidates.push({
@@ -616,10 +657,8 @@ export function extractBuiltInCandidates(
       });
     }
 
-    // Pattern B: Honorific names ("Mr. Amit Patil", "Mrs. Sneha Kulkarni", "Dr. Rajesh Rao")
-    const honorificRegex =
-      /\b(?:Mr|Mrs|Ms|Miss|Dr|Prof|Shri|Smt)\.?\s+([A-Z][a-z]{1,24}(?:\s+[A-Z][a-z]{1,24}){1,2})\b/g;
-    while ((m = honorificRegex.exec(text)) !== null) {
+    RE_PERSON_HONORIFIC.lastIndex = 0;
+    while ((m = RE_PERSON_HONORIFIC.exec(text)) !== null) {
       const full = m[0];
       candidates.push({
         type: 'PERSON',
@@ -631,17 +670,9 @@ export function extractBuiltInCandidates(
       });
     }
 
-    // Pattern C: Bare CSV cell under a Name column
-    if (
-      hint &&
-      /\b(name|customer|client|employee|patient|person|applicant|holder|contact)\b/.test(hint) &&
-      !/\b(company|city|file|product|org|organization|bank|street|road)\b/.test(hint)
-    ) {
+    if (hint && RE_PERSON_HINT_POS.test(hint) && !RE_PERSON_HINT_NEG.test(hint)) {
       const trimmed = text.trim();
-      if (
-        /^[A-Z][a-zA-Z'.-]{1,24}(?:\s+[A-Z][a-zA-Z'.-]{1,24}){0,3}$/.test(trimmed) &&
-        !/^(Unknown|None|N\/A|Null|True|False)$/i.test(trimmed)
-      ) {
+      if (RE_PERSON_BARE.test(trimmed) && !RE_PERSON_BARE_EXCL.test(trimmed)) {
         const start = text.indexOf(trimmed);
         candidates.push({
           type: 'PERSON',
@@ -656,15 +687,12 @@ export function extractBuiltInCandidates(
   }
 
   // 14. Physical Addresses (labelled address lines, street/apartment heuristics, or CSV address column)
-  {
-    // Pattern A: Explicit "Address: ..." line
-    const labelledAddrRegex =
-      /\b(?:Permanent\s*Address|Residential\s*Address|Home\s*Address|Billing\s*Address|Shipping\s*Address|Mailing\s*Address|Address|Addr)\s*[:=-]\s*([^\n\r]{6,140})/gi;
+  if (isEnabled('ADDRESS')) {
+    RE_ADDRESS_LABEL.lastIndex = 0;
     let m: RegExpExecArray | null;
-    while ((m = labelledAddrRegex.exec(text)) !== null) {
+    while ((m = RE_ADDRESS_LABEL.exec(text)) !== null) {
       const val = m[1].trim();
       if (val.length < 5) continue;
-      // Do not treat an IP address line as a physical address
       const precedingLabel = m[0].slice(0, m[0].indexOf(val)).toLowerCase();
       if (/\bip\s*address\b/.test(precedingLabel)) continue;
       if (/^ip\b/.test(getPrecedingContext(text, m.index, 6).toLowerCase())) continue;
@@ -681,10 +709,8 @@ export function extractBuiltInCandidates(
       });
     }
 
-    // Pattern B: Inline street / flat / apartment heuristic ("Flat 4B, Green Apartments, Pune", "123 Main Street, Mumbai", "12 MG Road, Pune")
-    const streetRegex =
-      /\b(?:(?:Flat|Apt|Apartment|Plot|House|Room|Suite|Block|Sector|Shop|Unit)\s*(?:No\.?\s*)?[A-Z0-9/-]{1,8},?\s+[A-Za-z0-9.\s'-]{2,45}(?:Apartments?|Residency|Heights|Towers?|Enclave|Society|Complex|Villas?|Park|Colony|Nagar|Layout|Phase|Road|Rd|Street|St|Avenue|Ave|Lane|Ln|Marg|Boulevard|Blvd|Drive|Dr)|(?:\d{1,5}[A-Z]?\s+(?:[A-Za-z0-9.'-]+\s+){1,4}(?:Road|Rd|Street|St|Avenue|Ave|Lane|Ln|Marg|Cross|Main|Boulevard|Blvd|Drive|Dr|Nagar|Colony|Park|Enclave|Layout|Sector|Phase)))(?:,\s*[A-Za-z\s.-]{2,30}){0,3}/gi;
-    while ((m = streetRegex.exec(text)) !== null) {
+    RE_ADDRESS_STREET.lastIndex = 0;
+    while ((m = RE_ADDRESS_STREET.exec(text)) !== null) {
       const val = m[0].trim().replace(/[.,;]+$/, '');
       if (val.length >= 8) {
         candidates.push({
@@ -698,8 +724,7 @@ export function extractBuiltInCandidates(
       }
     }
 
-    // Pattern C: CSV cell under an Address column
-    if (hint && /\b(address|addr|street|residence|location)\b/.test(hint) && !/\bip\b/.test(hint)) {
+    if (hint && RE_ADDRESS_HINT.test(hint) && !/\bip\b/.test(hint)) {
       const trimmed = text.trim();
       if (trimmed.length >= 6) {
         const start = text.indexOf(trimmed);

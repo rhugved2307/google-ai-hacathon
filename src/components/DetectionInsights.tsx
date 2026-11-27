@@ -2,7 +2,7 @@ import { Filter, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { CATEGORY_META } from '../engine/patterns';
 import type { ConfidenceLevel, PIICategory, ScanResult } from '../engine/types';
-import { getCategoryIcon } from './CategoryStats';
+import { getCategoryIcon } from '../utils/categoryIcons';
 
 interface DetectionInsightsProps {
   scanResult: ScanResult;
@@ -41,9 +41,13 @@ export function DetectionInsights({
   }, [detections, activeCategoryFilter, confidenceFilter, searchQuery]);
 
   return (
-    <section aria-label="Detection insights" className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+    <section
+      id="veltrix-insights"
+      aria-label="Detection insights"
+      className="grid grid-cols-1 gap-5 lg:grid-cols-12"
+    >
       {/* Left: Category Breakdown with Icons & Horizontal Progress Bars */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 lg:col-span-5 dark:border-[#283449] dark:bg-[#141B2D]">
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 lg:col-span-5 dark:border-white/[0.06] dark:bg-[#131318]">
         <div className="mb-4 flex items-center justify-between gap-2">
           <div>
             <h2 className="text-sm font-semibold text-slate-900 dark:text-[#F8FAFC]">
@@ -66,7 +70,7 @@ export function DetectionInsights({
         </div>
 
         {categoryStats.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-xs text-slate-500 dark:border-[#283449] dark:text-[#94A3B8]">
+          <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-xs text-slate-500 dark:border-white/[0.08] dark:text-[#94A3B8]">
             No sensitive patterns were matched in this input.
           </div>
         ) : (
@@ -84,14 +88,14 @@ export function DetectionInsights({
                   aria-pressed={selected}
                   className={`block w-full rounded-xl border p-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8B5CF6] ${
                     selected
-                      ? 'border-[#8B5CF6] bg-[#8B5CF6]/10 dark:border-[#A78BFA] dark:bg-[#1B2540]'
-                      : 'border-slate-200/80 bg-slate-50/50 hover:border-slate-300 dark:border-[#283449] dark:bg-[#0F1629] dark:hover:border-[#3A4B69]'
+                      ? 'border-[#8B5CF6] bg-[#8B5CF6]/10 dark:border-[#A78BFA] dark:bg-[#191335]'
+                      : 'border-slate-200/80 bg-slate-50/50 hover:border-slate-300 dark:border-white/[0.05] dark:bg-[#1E1E24] dark:hover:border-[#8B5CF6]/45'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <span
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white ring-1 ring-slate-200 dark:bg-[#1B2540] dark:ring-[#283449]"
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white ring-1 ring-slate-200 dark:bg-[#151129] dark:ring-white/[0.08]"
                         style={{ color: meta.accentHex }}
                       >
                         <Icon className="h-3.5 w-3.5" aria-hidden="true" />
@@ -116,7 +120,7 @@ export function DetectionInsights({
                     </div>
                   </div>
 
-                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-[#1B2540]">
+                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-white/[0.08]">
                     <div
                       className={`h-full rounded-full transition-all duration-200 ${meta.barClass}`}
                       style={{ width: `${Math.max(stat.percentage, 4)}%` }}
@@ -130,7 +134,7 @@ export function DetectionInsights({
       </div>
 
       {/* Right: Filterable Privacy-Safe Audit Log */}
-      <div className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5 lg:col-span-7 dark:border-[#283449] dark:bg-[#141B2D]">
+      <div className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5 lg:col-span-7 dark:border-white/[0.06] dark:bg-[#131318]">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2.5">
           <div>
             <h3 className="text-sm font-semibold text-slate-900 dark:text-[#F8FAFC]">
@@ -153,7 +157,7 @@ export function DetectionInsights({
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search rule or type..."
                 aria-label="Search audit log"
-                className="h-8 w-40 rounded-lg border border-slate-200 bg-slate-50 pl-8 pr-2.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-[#8B5CF6] focus:outline-none dark:border-[#283449] dark:bg-[#0F1629] dark:text-[#F8FAFC] dark:placeholder:text-[#64748B]"
+                className="h-8 w-40 rounded-lg border border-slate-200 bg-slate-50 pl-8 pr-2.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-[#8B5CF6] focus:outline-none dark:border-white/[0.08] dark:bg-[#1E1E24] dark:text-[#F8FAFC] dark:placeholder:text-[#7A7E91]"
               />
             </div>
 
@@ -163,7 +167,7 @@ export function DetectionInsights({
                 aria-label="Filter by confidence"
                 value={confidenceFilter}
                 onChange={(e) => setConfidenceFilter(e.target.value as ConfidenceLevel | 'all')}
-                className="h-8 rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-700 focus:border-[#8B5CF6] focus:outline-none dark:border-[#283449] dark:bg-[#0F1629] dark:text-[#F8FAFC]"
+                className="h-8 rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-700 focus:border-[#8B5CF6] focus:outline-none dark:border-white/[0.08] dark:bg-[#1E1E24] dark:text-[#F8FAFC]"
               >
                 <option value="all">All Confidence</option>
                 <option value="high">High</option>
@@ -175,7 +179,7 @@ export function DetectionInsights({
         </div>
 
         {/* Table */}
-        <div className="max-h-[380px] flex-1 overflow-auto rounded-xl border border-slate-200 dark:border-[#283449]">
+        <div className="max-h-[380px] flex-1 overflow-auto rounded-xl border border-slate-200 dark:border-white/[0.06]">
           {filteredDetections.length === 0 ? (
             <div className="py-12 text-center text-xs text-slate-500 dark:text-[#94A3B8]">
               {detections.length === 0
@@ -184,13 +188,13 @@ export function DetectionInsights({
             </div>
           ) : (
             <table className="w-full border-collapse text-left text-xs">
-              <thead className="sticky top-0 bg-slate-50 text-[11px] font-semibold text-slate-600 dark:bg-[#1B2540] dark:text-[#94A3B8]">
-                <tr className="border-b border-slate-200 dark:border-[#283449]">
-                  <th className="px-3.5 py-2.5">Category</th>
-                  <th className="px-3.5 py-2.5">Detection Rule</th>
-                  <th className="px-3.5 py-2.5">{isCSVMode ? 'Row / Col' : 'Position'}</th>
-                  <th className="px-3.5 py-2.5">Sanitized Label</th>
-                  <th className="px-3.5 py-2.5 text-right">Confidence</th>
+              <thead className="sticky top-0 bg-slate-50 text-[11px] font-semibold text-slate-600 dark:bg-[#191335] dark:text-[#A6AAB8]">
+                <tr className="border-b border-slate-200 dark:border-white/[0.06]">
+                  <th scope="col" className="px-3.5 py-2.5">Category</th>
+                  <th scope="col" className="px-3.5 py-2.5">Detection Rule</th>
+                  <th scope="col" className="px-3.5 py-2.5">{isCSVMode ? 'Row / Col' : 'Position'}</th>
+                  <th scope="col" className="px-3.5 py-2.5">Sanitized Label</th>
+                  <th scope="col" className="px-3.5 py-2.5 text-right">Confidence</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200/70 dark:divide-[#283449]/70">

@@ -37,8 +37,9 @@ export function CSVAnalysis({
 
   return (
     <section
+      id="veltrix-csv"
       aria-label="CSV analysis"
-      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs dark:border-[#283449] dark:bg-[#141B2D] dark:shadow-none"
+      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs dark:border-white/[0.06] dark:bg-[#131318] dark:shadow-none"
     >
       {/* Header */}
       <div className="flex flex-col gap-3.5 lg:flex-row lg:items-center lg:justify-between">
@@ -112,15 +113,15 @@ export function CSVAnalysis({
 
       {/* Sub-view 1: Column Selection & Stats Table */}
       {subTab === 'columns' && (
-        <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 dark:border-[#283449]">
+        <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 dark:border-white/[0.08]">
           <table className="w-full min-w-[600px] border-collapse text-left text-xs">
-            <thead className="bg-slate-50 text-[11px] font-semibold text-slate-600 dark:bg-[#1B2540] dark:text-[#94A3B8]">
-              <tr className="border-b border-slate-200 dark:border-[#283449]">
-                <th className="w-16 px-3.5 py-2.5">Sanitize</th>
-                <th className="px-3.5 py-2.5">Column</th>
-                <th className="px-3.5 py-2.5 text-right">Detected PII</th>
-                <th className="px-3.5 py-2.5">Category Statistics</th>
-                <th className="px-3.5 py-2.5 text-right">Status</th>
+            <thead className="bg-slate-50 text-[11px] font-semibold text-slate-600 dark:bg-[#191335] dark:text-[#A6AAB8]">
+              <tr className="border-b border-slate-200 dark:border-white/[0.08]">
+                <th scope="col" className="w-16 px-3.5 py-2.5">Sanitize</th>
+                <th scope="col" className="px-3.5 py-2.5">Column</th>
+                <th scope="col" className="px-3.5 py-2.5 text-right">Detected PII</th>
+                <th scope="col" className="px-3.5 py-2.5">Category Statistics</th>
+                <th scope="col" className="px-3.5 py-2.5 text-right">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200/70 dark:divide-[#283449]/70">
@@ -202,13 +203,13 @@ export function CSVAnalysis({
       {/* Sub-view 2: Sanitized Tabular Preview */}
       {subTab === 'preview' && previewParsed && (
         <div className="mt-4 space-y-2">
-          <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-[#283449]">
+          <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/[0.08]">
             <table className="w-full min-w-[640px] border-collapse text-left font-mono text-xs">
-              <thead className="bg-slate-50 text-[11px] font-semibold text-slate-600 dark:bg-[#1B2540] dark:text-[#94A3B8]">
-                <tr className="border-b border-slate-200 dark:border-[#283449]">
-                  <th className="w-12 px-3 py-2.5">#</th>
+              <thead className="bg-slate-50 text-[11px] font-semibold text-slate-600 dark:bg-[#191335] dark:text-[#A6AAB8]">
+                <tr className="border-b border-slate-200 dark:border-white/[0.08]">
+                  <th scope="col" className="w-12 px-3 py-2.5">#</th>
                   {previewParsed.headers.map((header, idx) => (
-                    <th key={`${idx}-${header}`} className="px-3 py-2.5 whitespace-nowrap">
+                    <th key={`${idx}-${header}`} scope="col" className="px-3 py-2.5 whitespace-nowrap">
                       {header}
                     </th>
                   ))}

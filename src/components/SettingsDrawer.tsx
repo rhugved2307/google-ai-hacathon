@@ -9,7 +9,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CATEGORY_LIST, CATEGORY_META } from '../engine/patterns';
 import type {
   ConfidenceLevel,
@@ -18,6 +18,7 @@ import type {
   RedactionMode,
   SessionHistoryEntry,
 } from '../engine/types';
+import { validateCustomRegexPattern } from '../engine/validators';
 
 export type DrawerTab = 'mode' | 'detectors' | 'rules' | 'session';
 
@@ -95,14 +96,46 @@ export function SettingsDrawer({
   const [ruleCaseInsensitive, setRuleCaseInsensitive] = useState(true);
   const [ruleConfidence, setRuleConfidence] = useState<ConfidenceLevel>('medium');
   const [ruleError, setRuleError] = useState<string | null>(null);
+  const drawerPanelRef = useRef<HTMLDivElement | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+
+    const panel = drawerPanelRef.current;
+    const focusableSelector =
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+    // Move initial focus inside drawer for keyboard users
+    const focusables = panel?.querySelectorAll<HTMLElement>(focusableSelector);
+    focusables?.[0]?.focus();
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key === 'Tab' && panel) {
+        const items = Array.from(panel.querySelectorAll<HTMLElement>(focusableSelector));
+        if (items.length === 0) return;
+        const first = items[0];
+        const last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      previousFocusRef.current?.focus();
+    };
   }, [open, onClose]);
 
   if (!open) return null;
@@ -121,30 +154,25 @@ export function SettingsDrawer({
       setRuleError('Please enter a rule name.');
       return;
     }
-    if (!trimmedPattern) {
-      setRuleError('Please enter a regular expression pattern.');
+
+    const flags = ruleCaseInsensitive ? 'gi' : 'g';
+    const check = validateCustomRegexPattern(trimmedPattern, flags);
+    if (!check.valid) {
+      setRuleError(check.error || 'Invalid regular expression.');
       return;
     }
 
-    try {
-      const flags = ruleCaseInsensitive ? 'gi' : 'g';
-      new RegExp(trimmedPattern, flags);
-      onAddCustomRule({
-        name: trimmedName,
-        pattern: trimmedPattern,
-        flags,
-        replacement: trimmedReplacement,
-        confidence: ruleConfidence,
-        enabled: true,
-      });
-      setRuleName('');
-      setRulePattern('');
-      setRuleReplacement('[CUSTOM REDACTED]');
-    } catch (err) {
-      setRuleError(
-        err instanceof Error ? `Invalid regex: ${err.message}` : 'Invalid regular expression.'
-      );
-    }
+    onAddCustomRule({
+      name: trimmedName,
+      pattern: trimmedPattern,
+      flags: check.safeFlags,
+      replacement: trimmedReplacement,
+      confidence: ruleConfidence,
+      enabled: true,
+    });
+    setRuleName('');
+    setRulePattern('');
+    setRuleReplacement('[CUSTOM REDACTED]');
   };
 
   const tabs: Array<{ id: DrawerTab; label: string; icon: typeof SlidersHorizontal }> = [
@@ -163,11 +191,12 @@ export function SettingsDrawer({
       onClick={onClose}
     >
       <div
-        className="flex h-full w-full max-w-lg flex-col border-l border-slate-200 bg-white shadow-2xl dark:border-[#283449] dark:bg-[#141B2D]"
+        ref={drawerPanelRef}
+        className="flex h-full w-full max-w-lg flex-col border-l border-slate-200 bg-white shadow-2xl dark:border-white/[0.08] dark:bg-[#131318]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Drawer Header */}
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-[#283449]">
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-white/[0.08]">
           <div className="flex items-center gap-2.5">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#8B5CF6]/15 text-[#7C3AED] dark:text-[#A78BFA]">
               <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />

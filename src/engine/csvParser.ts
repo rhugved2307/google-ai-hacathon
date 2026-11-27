@@ -117,23 +117,53 @@ export function parseCSV(rawInput: string): ParsedCSV {
   };
 }
 
-function escapeCSVCell(value: string, delimiter = ','): string {
-  const needsQuotes =
-    value.includes(delimiter) ||
-    value.includes('"') ||
-    value.includes('\n') ||
-    value.includes('\r');
-  if (!needsQuotes) return value;
-  return `"${value.replace(/"/g, '""')}"`;
+const SAFE_NUMERIC_REGEX = /^-\d+(?:\.\d+)?$/;
+
+/**
+ * Neutralizes spreadsheet formula injection (DDE / Excel / Sheets formula execution)
+ * by prefixing cells beginning with =, +, @, tab, CR, or non-numeric - with a single quote.
+ */
+export function neutralizeCSVFormula(value: string): string {
+  if (!value) return value;
+  const firstChar = value[0];
+  if (
+    firstChar === '=' ||
+    firstChar === '+' ||
+    firstChar === '@' ||
+    firstChar === '\t' ||
+    firstChar === '\r' ||
+    (firstChar === '-' && !SAFE_NUMERIC_REGEX.test(value.trim()))
+  ) {
+    return `'${value}`;
+  }
+  return value;
 }
 
-export function serializeCSV(parsed: ParsedCSV, rowsOverride?: string[][]): string {
+function escapeCSVCell(value: string, delimiter = ',', neutralizeFormulas = false): string {
+  const safeValue = neutralizeFormulas ? neutralizeCSVFormula(value) : value;
+  const needsQuotes =
+    safeValue.includes(delimiter) ||
+    safeValue.includes('"') ||
+    safeValue.includes('\n') ||
+    safeValue.includes('\r');
+  if (!needsQuotes) return safeValue;
+  return `"${safeValue.replace(/"/g, '""')}"`;
+}
+
+export function serializeCSV(
+  parsed: ParsedCSV,
+  rowsOverride?: string[][],
+  options?: { neutralizeFormulas?: boolean }
+): string {
   if (parsed.headers.length === 0) return '';
   const delimiter = parsed.delimiter || ',';
-  const headerLine = parsed.headers.map((h) => escapeCSVCell(h, delimiter)).join(delimiter);
+  const neutralize = options?.neutralizeFormulas ?? false;
+  const headerLine = parsed.headers
+    .map((h) => escapeCSVCell(h, delimiter, neutralize))
+    .join(delimiter);
   const bodyRows = rowsOverride ?? parsed.rows;
   const bodyLines = bodyRows.map((row) =>
-    row.map((cell) => escapeCSVCell(cell, delimiter)).join(delimiter)
+    row.map((cell) => escapeCSVCell(cell, delimiter, neutralize)).join(delimiter)
   );
   const output = [headerLine, ...bodyLines].join(parsed.lineEnding);
   return parsed.hadTrailingNewline ? output + parsed.lineEnding : output;

@@ -1,4 +1,4 @@
-import { ArrowLeft, Copy, Lock, ScanSearch, ShieldCheck, SlidersHorizontal } from 'lucide-react';
+import { Copy, ScanSearch, ShieldCheck, SlidersHorizontal } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { CSVAnalysis } from './components/CSVAnalysis';
 import { DetectionInsights } from './components/DetectionInsights';
@@ -37,11 +37,13 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
   const [privacyModalOpen, setPrivacyModalOpen] = useState<boolean>(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [statusAnnouncement, setStatusAnnouncement] = useState<string>('');
 
   const pushToast = useCallback(
     (type: ToastMessage['type'], title: string, description?: string) => {
       const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
       setToasts((prev) => [...prev.slice(-3), { id, type, title, description }]);
+      setStatusAnnouncement(description ? `${title}. ${description}` : title);
       window.setTimeout(() => {
         setToasts((prev) => prev.filter((t) => t.id !== id));
       }, 3600);
@@ -281,12 +283,21 @@ export default function App() {
   return (
     <div
       id="top"
-      className={`min-h-screen bg-[#F8FAFC] text-[#0F172A] transition-colors dark:text-[#F8FAFC] ${
-        activePage === 'overview'
-          ? 'dark:bg-[#09090D]'
-          : 'dark:bg-[#0B1020] dark:veltrix-ambient-bg'
+      className={`min-h-screen bg-[#F8FAFC] text-[#0F172A] transition-colors dark:bg-[#09090D] dark:text-[#F8FAFC] ${
+        activePage === 'workspace' ? 'dark:veltrix-ambient-bg' : ''
       }`}
     >
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-xl focus:bg-[#7C5CFC] focus:px-4 focus:py-2 focus:text-xs focus:font-semibold focus:text-white focus:shadow-lg"
+      >
+        Skip to main content
+      </a>
+
+      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+        {statusAnnouncement}
+      </div>
+
       <Navbar
         activePage={activePage}
         onChangePage={(page) => {
@@ -304,7 +315,9 @@ export default function App() {
       />
 
       <main
-        className={`mx-auto max-w-[1440px] px-4 pt-6 sm:px-6 lg:px-8 ${
+        id="main-content"
+        tabIndex={-1}
+        className={`mx-auto max-w-[1440px] px-4 pt-5 outline-none sm:px-6 lg:px-8 ${
           activePage === 'workspace' ? 'space-y-6 pb-24 lg:pb-12' : 'pb-10'
         }`}
       >
@@ -322,34 +335,7 @@ export default function App() {
           />
         ) : (
           <>
-            {/* Compact Hero Section */}
-            <section className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div className="max-w-2xl space-y-1.5">
-                <button
-                  type="button"
-                  onClick={() => setActivePage('overview')}
-                  className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 transition-colors hover:text-[#7C3AED] dark:text-[#94A3B8] dark:hover:text-[#A78BFA]"
-                >
-                  <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>Back to Security Overview</span>
-                </button>
-
-                <h1 className="text-2xl font-bold tracking-tight text-slate-900 text-balance sm:text-3xl dark:text-[#F8FAFC]">
-                  Clean your data. Protect identities.
-                </h1>
-                <p className="text-sm leading-relaxed text-slate-600 dark:text-[#94A3B8]">
-                  Scan, highlight, and redact personally identifiable information from text and CSV
-                  files entirely inside your browser—with zero external transmission.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-[#94A3B8] shrink-0">
-                <Lock className="h-3.5 w-3.5 text-emerald-600 dark:text-[#34D399]" aria-hidden="true" />
-                <span>Browser-native engine · 15 detectors</span>
-              </div>
-            </section>
-
-            {/* Split-Screen Input & Sanitized Output Workspace */}
+            {/* Obsidian Document Studio & Floating Sanitized Viewer */}
             <Workspace
               rawText={scanner.rawText}
               onChangeText={scanner.updateRawText}
@@ -396,6 +382,8 @@ export default function App() {
               onDownloadCsv={handleDownloadCsv}
               onDownloadReport={handleDownloadReport}
               onOpenSettings={() => setSettingsOpen(true)}
+              onOpenHelp={() => setPrivacyModalOpen(true)}
+              onBackToOverview={() => setActivePage('overview')}
               mobileTab={mobileTab}
               onChangeMobileTab={setMobileTab}
             />
@@ -444,16 +432,17 @@ export default function App() {
             )}
 
             {/* Clean Privacy Footer Strip */}
-            <footer className="flex flex-col items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 text-xs text-slate-600 sm:flex-row sm:items-center dark:border-[#283449] dark:bg-[#141B2D] dark:text-[#94A3B8]">
+            <footer className="flex flex-col items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 text-xs text-slate-600 sm:flex-row sm:items-center dark:border-white/[0.06] dark:bg-[#131318] dark:text-[#94A3B8]">
               <div className="flex items-start gap-2.5 sm:items-center">
                 <ShieldCheck
-                  className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 sm:mt-0 dark:text-[#34D399]"
+                  className="mt-0.5 h-4 w-4 shrink-0 text-[#7C3AED] sm:mt-0 dark:text-[#A78BFA]"
                   aria-hidden="true"
                 />
                 <span>
-                  <strong className="font-semibold text-slate-900 dark:text-[#F8FAFC]">VELTRIX</strong>{' '}
-                  processes all text and files strictly on your device. Automated detection may miss
-                  edge cases—always review output before sharing.
+                  <strong className="font-semibold text-slate-900 dark:text-[#F8FAFC]">
+                    YOUR DATA STAYS ON THIS DEVICE — PROCESSING HAPPENS LOCALLY.
+                  </strong>{' '}
+                  Automated detection may miss edge cases—always review output before sharing.
                 </span>
               </div>
 
@@ -471,13 +460,13 @@ export default function App() {
 
       {/* Mobile Sticky Bottom Action Bar (Workspace view) */}
       {activePage === 'workspace' && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-3 py-2.5 backdrop-blur-md lg:hidden dark:border-[#283449] dark:bg-[#0B1020]/95">
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-3 py-2.5 backdrop-blur-md lg:hidden dark:border-white/[0.06] dark:bg-[#0D0D12]/95">
           <div className="mx-auto flex max-w-lg items-center gap-2">
             <button
               type="button"
               onClick={handleScan}
               disabled={!scanner.rawText.trim() || scanner.isScanning}
-              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#8B5CF6] to-[#7C3AED] px-4 text-xs font-semibold text-white shadow-sm disabled:opacity-45 whitespace-nowrap"
+              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#8B5CF6] to-[#6D28D9] px-4 text-xs font-semibold text-white shadow-sm shadow-[#8B5CF6]/25 disabled:opacity-45 whitespace-nowrap"
             >
               <ScanSearch className="h-4 w-4" aria-hidden="true" />
               <span>{scanner.isScanning ? 'Scanning...' : 'Scan & Sanitize'}</span>
@@ -488,7 +477,7 @@ export default function App() {
               onClick={handleCopySanitized}
               disabled={!scanner.hasScanned || !scanner.scanResult?.sanitizedText}
               aria-label="Copy sanitized output"
-              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-semibold text-slate-700 disabled:opacity-40 dark:border-[#283449] dark:bg-[#141B2D] dark:text-[#F8FAFC]"
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-semibold text-slate-700 disabled:opacity-40 dark:border-white/[0.08] dark:bg-[#1C1C24] dark:text-[#F8FAFC]"
             >
               <Copy className="h-4 w-4" aria-hidden="true" />
               <span>Copy</span>
@@ -498,7 +487,7 @@ export default function App() {
               type="button"
               onClick={() => setSettingsOpen(true)}
               aria-label="Open redaction settings"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 dark:border-[#283449] dark:bg-[#141B2D] dark:text-[#F8FAFC]"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 dark:border-white/[0.08] dark:bg-[#1C1C24] dark:text-[#F8FAFC]"
             >
               <SlidersHorizontal className="h-4 w-4 text-[#8B5CF6] dark:text-[#A78BFA]" aria-hidden="true" />
             </button>

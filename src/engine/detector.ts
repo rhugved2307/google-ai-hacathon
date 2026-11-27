@@ -13,6 +13,7 @@ import type {
   ScanOptions,
   ScanResult,
 } from './types';
+import { validateCustomRegexPattern } from './validators';
 
 const CONFIDENCE_RANK: Record<ConfidenceLevel, number> = {
   high: 3,
@@ -50,16 +51,26 @@ function getLineAndColumn(lineStarts: number[], offset: number): { line: number;
 
 function extractCustomRuleCandidates(text: string, rules: CustomRule[]): CandidateMatch[] {
   const candidates: CandidateMatch[] = [];
+  const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+
   for (const rule of rules) {
     if (!rule.enabled || !rule.pattern.trim()) continue;
+    const validation = validateCustomRegexPattern(rule.pattern, rule.flags);
+    if (!validation.valid) continue;
+
     try {
-      const safeFlags = Array.from(new Set((rule.flags + 'g').replace(/[^gimsu]/g, ''))).join('');
-      const regex = new RegExp(rule.pattern, safeFlags);
+      const regex = new RegExp(rule.pattern, validation.safeFlags);
       let m: RegExpExecArray | null;
       let guard = 0;
       const MAX_MATCHES = 5000;
+      const MAX_RULE_MS = 50;
+      const startTime = now();
+
       while ((m = regex.exec(text)) !== null && guard < MAX_MATCHES) {
         guard += 1;
+        if ((guard & 63) === 0 && now() - startTime > MAX_RULE_MS) {
+          break;
+        }
         if (m[0].length === 0) {
           regex.lastIndex += 1;
           continue;
@@ -84,8 +95,10 @@ function extractCustomRuleCandidates(text: string, rules: CustomRule[]): Candida
 
 /**
  * Resolves overlapping candidate intervals using specificity priority, span length, and confidence.
+ * Uses a Uint8Array occupancy map for O(N log N + matchedChars) resolution without quadratic blowup,
+ * falling back to binary-searched interval insertion for multi-megabyte strings.
  */
-function resolveOverlaps(candidates: CandidateMatch[]): CandidateMatch[] {
+function resolveOverlaps(candidates: CandidateMatch[], textLength: number): CandidateMatch[] {
   if (candidates.length <= 1) return candidates;
 
   const ranked = [...candidates].sort((a, b) => {
@@ -98,21 +111,49 @@ function resolveOverlaps(candidates: CandidateMatch[]): CandidateMatch[] {
   });
 
   const accepted: CandidateMatch[] = [];
-  for (const candidate of ranked) {
-    if (candidate.start >= candidate.end) continue;
-    let overlaps = false;
-    for (const existing of accepted) {
-      if (candidate.start < existing.end && candidate.end > existing.start) {
-        overlaps = true;
-        break;
+
+  if (textLength > 0 && textLength <= 2_000_000) {
+    const occupied = new Uint8Array(textLength);
+    for (const candidate of ranked) {
+      if (candidate.start >= candidate.end || candidate.start < 0 || candidate.end > textLength) {
+        continue;
+      }
+      let overlaps = false;
+      for (let i = candidate.start; i < candidate.end; i++) {
+        if (occupied[i] !== 0) {
+          overlaps = true;
+          break;
+        }
+      }
+      if (!overlaps) {
+        occupied.fill(1, candidate.start, candidate.end);
+        accepted.push(candidate);
       }
     }
-    if (!overlaps) {
-      accepted.push(candidate);
-    }
+    return accepted.sort((a, b) => a.start - b.start);
   }
 
-  return accepted.sort((a, b) => a.start - b.start);
+  // Fallback for very large texts (> 2M chars): maintain accepted sorted by start via binary search
+  for (const candidate of ranked) {
+    if (candidate.start >= candidate.end) continue;
+    let lo = 0;
+    let hi = accepted.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (accepted[mid].start < candidate.start) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    const prev = lo > 0 ? accepted[lo - 1] : null;
+    const next = lo < accepted.length ? accepted[lo] : null;
+    if (prev && prev.end > candidate.start) continue;
+    if (next && next.start < candidate.end) continue;
+    accepted.splice(lo, 0, candidate);
+  }
+
+  return accepted;
 }
 
 /**
@@ -137,17 +178,19 @@ export function scanAndSanitizeText(text: string, options: ScanOptions): ScanRes
     };
   }
 
-  const builtIn = extractBuiltInCandidates(text, options.contextHint);
-  const custom = options.enabledCategories.CUSTOM
-    ? extractCustomRuleCandidates(text, options.customRules)
-    : [];
-
-  // Filter by enabled categories before resolving overlaps
-  const enabledCandidates = [...builtIn, ...custom].filter(
-    (c) => options.enabledCategories[c.type] !== false
+  const builtIn = extractBuiltInCandidates(
+    text,
+    options.contextHint,
+    options.enabledCategories
   );
+  const custom =
+    options.enabledCategories.CUSTOM !== false && options.customRules.length > 0
+      ? extractCustomRuleCandidates(text, options.customRules)
+      : [];
 
-  const resolved = resolveOverlaps(enabledCandidates);
+  const enabledCandidates = custom.length > 0 ? [...builtIn, ...custom] : builtIn;
+
+  const resolved = resolveOverlaps(enabledCandidates, text.length);
   const lineStarts = computeLineStarts(text);
 
   const detections: Detection[] = [];

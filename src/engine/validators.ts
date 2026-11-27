@@ -244,15 +244,46 @@ export function validateUPI(
   return { valid: false, confidence: 'low' };
 }
 
+const MONTH_NAME_TO_NUM: Record<string, number> = {
+  jan: 1,
+  feb: 2,
+  mar: 3,
+  apr: 4,
+  may: 5,
+  jun: 6,
+  jul: 7,
+  aug: 8,
+  sep: 9,
+  sept: 9,
+  oct: 10,
+  nov: 11,
+  dec: 12,
+};
+
+function daysInMonth(year: number, month: number): number {
+  if (month < 1 || month > 12) return 0;
+  if (month === 2) {
+    const isLeap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+    return isLeap ? 29 : 28;
+  }
+  if (month === 4 || month === 6 || month === 9 || month === 11) {
+    return 30;
+  }
+  return 31;
+}
+
+function isValidCalendarDate(year: number, month: number, day: number): boolean {
+  if (year < 1900 || year > 2099) return false;
+  if (month < 1 || month > 12) return false;
+  return day >= 1 && day <= daysInMonth(year, month);
+}
+
 export function isValidDateString(raw: string): boolean {
   const trimmed = raw.trim();
   // YYYY-MM-DD or YYYY/MM/DD
   let m = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/.exec(trimmed);
   if (m) {
-    const year = Number(m[1]);
-    const month = Number(m[2]);
-    const day = Number(m[3]);
-    return year >= 1900 && year <= 2099 && month >= 1 && month <= 12 && day >= 1 && day <= 31;
+    return isValidCalendarDate(Number(m[1]), Number(m[2]), Number(m[3]));
   }
   // DD/MM/YYYY or DD-MM-YYYY or MM/DD/YYYY
   m = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/.exec(trimmed);
@@ -260,18 +291,23 @@ export function isValidDateString(raw: string): boolean {
     const a = Number(m[1]);
     const b = Number(m[2]);
     const year = Number(m[3]);
-    if (year < 1900 || year > 2099) return false;
-    const validDMY = a >= 1 && a <= 31 && b >= 1 && b <= 12;
-    const validMDY = a >= 1 && a <= 12 && b >= 1 && b <= 31;
-    return validDMY || validMDY;
+    return isValidCalendarDate(year, b, a) || isValidCalendarDate(year, a, b);
   }
-  // Textual date like 12 May 2005 or May 12, 2005
-  if (
-    /^(?:\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{4}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{1,2},?\s+\d{4})$/i.test(
-      trimmed
-    )
-  ) {
-    return true;
+  // Textual date like 12 May 2005
+  m = /^(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+(\d{4})$/i.exec(
+    trimmed
+  );
+  if (m) {
+    const month = MONTH_NAME_TO_NUM[m[2].toLowerCase()];
+    return isValidCalendarDate(Number(m[3]), month, Number(m[1]));
+  }
+  // Textual date like May 12, 2005
+  m = /^(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+(\d{1,2}),?\s+(\d{4})$/i.exec(
+    trimmed
+  );
+  if (m) {
+    const month = MONTH_NAME_TO_NUM[m[1].toLowerCase()];
+    return isValidCalendarDate(Number(m[3]), month, Number(m[2]));
   }
   return false;
 }
@@ -294,4 +330,75 @@ export function validatePassport(
 export function isValidIndianPinCode(raw: string): boolean {
   const digits = raw.replace(/\s/g, '');
   return /^[1-9]\d{5}$/.test(digits);
+}
+
+export const MAX_CUSTOM_REGEX_LENGTH = 200;
+
+/**
+ * Validates user-supplied regular expressions to prevent syntax errors and catastrophic
+ * backtracking (ReDoS) before running them against document text.
+ */
+export function validateCustomRegexPattern(
+  pattern: string,
+  flags = 'g'
+): { valid: boolean; error?: string; safeFlags: string } {
+  const trimmed = pattern.trim();
+  const safeFlags = Array.from(new Set((flags + 'g').replace(/[^gimsu]/g, ''))).join('');
+
+  if (!trimmed) {
+    return { valid: false, error: 'Please enter a regular expression pattern.', safeFlags };
+  }
+  if (trimmed.length > MAX_CUSTOM_REGEX_LENGTH) {
+    return {
+      valid: false,
+      error: `Regex pattern must be ${MAX_CUSTOM_REGEX_LENGTH} characters or fewer.`,
+      safeFlags,
+    };
+  }
+
+  // Reject common catastrophic backtracking structures (nested quantifiers, quantified backreferences)
+  const nestedQuantifierPattern =
+    /\((?:[^()\\]|\\.)*(?:[+*]|\{\d+,\d*\})(?:[^()\\]|\\.)*\)(?:[+*?]|\{\d+,?\d*\})/;
+  const overlappingAlternationQuantifier =
+    /\((?:[^()\\|]|\\.)+\|(?:[^()\\|]|\\.)+\)(?:[+*]|\{\d+,\d*\})/;
+  const quantifiedBackreference = /\\[1-9](?:[+*]|\{\d+,\d*\})/;
+
+  if (
+    nestedQuantifierPattern.test(trimmed) ||
+    overlappingAlternationQuantifier.test(trimmed) ||
+    quantifiedBackreference.test(trimmed)
+  ) {
+    return {
+      valid: false,
+      error:
+        'Pattern rejected: nested quantifiers or repeated alternations can freeze the browser (ReDoS risk). Simplify the regex.',
+      safeFlags,
+    };
+  }
+
+  let compiled: RegExp;
+  try {
+    compiled = new RegExp(trimmed, safeFlags);
+  } catch (err) {
+    return {
+      valid: false,
+      error: err instanceof Error ? `Invalid regex: ${err.message}` : 'Invalid regular expression.',
+      safeFlags,
+    };
+  }
+
+  // Fast runtime backtracking probe on a short non-matching string
+  const probe = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaa!';
+  const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  compiled.test(probe);
+  const elapsed = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0;
+  if (elapsed > 15) {
+    return {
+      valid: false,
+      error: 'Pattern rejected: excessive regex backtracking detected.',
+      safeFlags,
+    };
+  }
+
+  return { valid: true, safeFlags };
 }

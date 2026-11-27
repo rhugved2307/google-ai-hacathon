@@ -1,5 +1,5 @@
 import { AlertTriangle, CheckCircle2, Keyboard, ShieldCheck, X } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 interface PrivacyModalProps {
   open: boolean;
@@ -7,13 +7,44 @@ interface PrivacyModalProps {
 }
 
 export function PrivacyModal({ open, onClose }: PrivacyModalProps) {
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
     if (!open) return;
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+
+    const dialog = dialogRef.current;
+    const focusableSelector =
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const focusables = dialog?.querySelectorAll<HTMLElement>(focusableSelector);
+    focusables?.[0]?.focus();
+
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key === 'Tab' && dialog) {
+        const items = Array.from(dialog.querySelectorAll<HTMLElement>(focusableSelector));
+        if (items.length === 0) return;
+        const first = items[0];
+        const last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
     };
     window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
+    return () => {
+      window.removeEventListener('keydown', handleKey);
+      previousFocusRef.current?.focus();
+    };
   }, [open, onClose]);
 
   if (!open) return null;
@@ -23,17 +54,18 @@ export function PrivacyModal({ open, onClose }: PrivacyModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-xs"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs"
       role="dialog"
       aria-modal="true"
       aria-labelledby="privacy-modal-title"
       onClick={onClose}
     >
       <div
-        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-[#283449] dark:bg-[#141B2D]"
+        ref={dialogRef}
+        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-white/[0.08] dark:bg-[#131318]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-slate-200 pb-4 dark:border-[#283449]">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 pb-4 dark:border-white/[0.08]">
           <div className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#8B5CF6]/15 text-[#7C3AED] dark:text-[#A78BFA]">
               <ShieldCheck className="h-5 w-5" aria-hidden="true" />
@@ -45,8 +77,8 @@ export function PrivacyModal({ open, onClose }: PrivacyModalProps) {
               >
                 VELTRIX Privacy Verification &amp; Guide
               </h2>
-              <p className="text-xs text-slate-500 dark:text-[#94A3B8]">
-                Clean your data. Protect identities. 100% browser-local execution.
+              <p className="text-xs font-semibold text-[#7C3AED] dark:text-[#A78BFA]">
+                YOUR DATA STAYS ON THIS DEVICE — PROCESSING HAPPENS LOCALLY.
               </p>
             </div>
           </div>
@@ -55,7 +87,7 @@ export function PrivacyModal({ open, onClose }: PrivacyModalProps) {
             type="button"
             onClick={onClose}
             aria-label="Close modal"
-            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-[#1B2540] dark:hover:text-[#F8FAFC]"
+            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/[0.08] dark:hover:text-[#F8FAFC]"
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -85,7 +117,7 @@ export function PrivacyModal({ open, onClose }: PrivacyModalProps) {
             ].map((item) => (
               <div
                 key={item}
-                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-800 dark:border-[#283449] dark:bg-[#1B2540] dark:text-[#F8FAFC]"
+                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-800 dark:border-white/[0.08] dark:bg-[#191335]/80 dark:text-[#F8FAFC]"
               >
                 <CheckCircle2
                   className="h-4 w-4 shrink-0 text-emerald-600 dark:text-[#34D399]"
@@ -122,15 +154,15 @@ export function PrivacyModal({ open, onClose }: PrivacyModalProps) {
               <span>Keyboard Shortcuts</span>
             </h3>
             <div className="mt-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
-              <div className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2 dark:border-[#283449]">
+              <div className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2 dark:border-white/[0.08]">
                 <span>Scan &amp; Sanitize</span>
-                <kbd className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-700 dark:bg-[#1B2540] dark:text-[#F8FAFC]">
+                <kbd className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-700 dark:bg-[#191335] dark:text-[#F8FAFC]">
                   Ctrl / ⌘ + Enter
                 </kbd>
               </div>
-              <div className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2 dark:border-[#283449]">
+              <div className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2 dark:border-white/[0.08]">
                 <span>Close Drawer / Dialog</span>
-                <kbd className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-700 dark:bg-[#1B2540] dark:text-[#F8FAFC]">
+                <kbd className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-700 dark:bg-[#191335] dark:text-[#F8FAFC]">
                   Esc
                 </kbd>
               </div>
@@ -138,7 +170,7 @@ export function PrivacyModal({ open, onClose }: PrivacyModalProps) {
           </div>
         </div>
 
-        <div className="mt-6 flex justify-end border-t border-slate-200 pt-4 dark:border-[#283449]">
+        <div className="mt-6 flex justify-end border-t border-slate-200 pt-4 dark:border-white/[0.08]">
           <button
             type="button"
             onClick={onClose}

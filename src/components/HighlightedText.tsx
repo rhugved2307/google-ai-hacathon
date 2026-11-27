@@ -1,5 +1,5 @@
 import { Eye, EyeOff } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { CATEGORY_META } from '../engine/patterns';
 import type { Detection, PIICategory } from '../engine/types';
 
@@ -9,6 +9,8 @@ interface HighlightedTextProps {
   showHighlights: boolean;
   onToggleHighlights: () => void;
   activeCategoryFilter: PIICategory | 'ALL';
+  fontClass?: string;
+  fontSizePx?: number;
 }
 
 interface TextSegment {
@@ -17,12 +19,14 @@ interface TextSegment {
   detection?: Detection;
 }
 
-export function HighlightedText({
+export const HighlightedText = memo(function HighlightedText({
   text,
   detections,
   showHighlights,
   onToggleHighlights,
   activeCategoryFilter,
+  fontClass = 'font-serif',
+  fontSizePx = 15,
 }: HighlightedTextProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
@@ -82,7 +86,7 @@ export function HighlightedText({
   return (
     <div className="flex h-full flex-col">
       {/* Legend & Highlight Toggle */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 bg-slate-50/80 px-4 py-2 dark:border-[#283449] dark:bg-[#11182A]">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 bg-slate-50/70 px-5 py-2 dark:border-white/[0.06] dark:bg-[#171232]/70">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
           {presentCategories.length === 0 ? (
             <span className="text-slate-500 dark:text-[#94A3B8]">
@@ -94,7 +98,7 @@ export function HighlightedText({
               return (
                 <span
                   key={cat}
-                  className="inline-flex items-center gap-1.5 font-medium text-slate-600 dark:text-[#94A3B8]"
+                  className="inline-flex items-center gap-1.5 font-medium text-slate-600 dark:text-[#A6AAB8]"
                 >
                   <span className={`h-2 w-2 rounded-xs ${meta.dotClass}`} aria-hidden="true" />
                   <span>{meta.shortLabel}</span>
@@ -107,7 +111,7 @@ export function HighlightedText({
         <button
           type="button"
           onClick={onToggleHighlights}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 transition-colors hover:border-[#8B5CF6]/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8B5CF6] whitespace-nowrap shrink-0 dark:border-[#283449] dark:bg-[#1B2540] dark:text-[#F8FAFC] dark:hover:border-[#8B5CF6]/60"
+          className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 transition-colors hover:border-[#8B5CF6]/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8B5CF6] whitespace-nowrap shrink-0 dark:border-white/[0.09] dark:bg-[#1E1A36] dark:text-[#F8FAFC] dark:hover:border-[#A78BFA]/60"
         >
           {showHighlights ? (
             <>
@@ -124,7 +128,10 @@ export function HighlightedText({
       </div>
 
       {/* Text Content */}
-      <div className="relative flex-1 overflow-auto p-4 font-mono text-[13px] leading-6 text-slate-800 whitespace-pre-wrap break-words dark:text-[#F8FAFC]">
+      <div
+        className={`relative flex-1 overflow-auto px-6 py-5 leading-7 text-slate-800 whitespace-pre-wrap break-words dark:text-[#F1F5F9] ${fontClass}`}
+        style={{ fontSize: `${fontSizePx}px` }}
+      >
         {segments.map((seg) => {
           if (!seg.detection) {
             return <span key={seg.key}>{seg.content}</span>;
@@ -138,19 +145,26 @@ export function HighlightedText({
             <span
               key={seg.key}
               tabIndex={0}
+              aria-label={`${meta.label}: ${seg.content}, redacted as ${det.replacement}`}
               onMouseEnter={() => setHoveredId(det.id)}
               onMouseLeave={() => setHoveredId((curr) => (curr === det.id ? null : curr))}
               onFocus={() => setHoveredId(det.id)}
               onBlur={() => setHoveredId((curr) => (curr === det.id ? null : curr))}
-              className={`relative inline-block cursor-help rounded-md border px-1 py-0.5 leading-5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8B5CF6] ${meta.highlightLight} ${meta.highlightDark}`}
+              className={`relative inline-flex items-baseline gap-1 cursor-help rounded-md border px-1 py-0.5 leading-5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8B5CF6] ${meta.highlightLight} ${meta.highlightDark}`}
             >
-              {seg.content}
+              <span>{seg.content}</span>
+              <span
+                aria-hidden="true"
+                className="select-none rounded px-1 py-px font-mono text-[9px] font-bold uppercase tracking-wider opacity-80 ring-1 ring-current/25"
+              >
+                {meta.shortLabel}
+              </span>
               {isHovered && (
                 <span
                   role="tooltip"
-                  className="pointer-events-none absolute bottom-full left-0 z-30 mb-2 w-64 rounded-xl border border-slate-200 bg-white p-3 font-sans text-left text-xs text-slate-900 shadow-2xl dark:border-[#283449] dark:bg-[#0B1020] dark:text-[#F8FAFC]"
+                  className="pointer-events-none absolute bottom-full left-0 z-30 mb-2 w-64 rounded-xl border border-slate-200 bg-white p-3 font-sans text-left text-xs text-slate-900 shadow-2xl dark:border-white/[0.12] dark:bg-[#131318] dark:text-[#F8FAFC]"
                 >
-                  <span className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5 dark:border-[#283449]">
+                  <span className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5 dark:border-white/[0.08]">
                     <span className={`font-semibold ${meta.textClass}`}>{meta.label}</span>
                     <span className="font-mono text-[10px] uppercase tracking-wider text-slate-500 dark:text-[#94A3B8]">
                       {det.confidence}
@@ -184,4 +198,4 @@ export function HighlightedText({
       </div>
     </div>
   );
-}
+});

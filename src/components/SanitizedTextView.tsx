@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import type { Detection, PIICategory } from '../engine/types';
 
 interface SanitizedTextViewProps {
@@ -7,6 +7,8 @@ interface SanitizedTextViewProps {
   detections: Detection[];
   isCSVMode: boolean;
   activeCategoryFilter: PIICategory | 'ALL';
+  fontClass?: string;
+  fontSizePx?: number;
 }
 
 interface SanitizedSegment {
@@ -17,14 +19,16 @@ interface SanitizedSegment {
 }
 
 /**
- * Renders sanitized output safely using React text nodes, highlighting emerald-green redaction labels.
+ * Renders sanitized output safely using React text nodes, highlighting emerald-teal redaction labels.
  */
-export function SanitizedTextView({
+export const SanitizedTextView = memo(function SanitizedTextView({
   rawText,
   sanitizedText,
   detections,
   isCSVMode,
   activeCategoryFilter,
+  fontClass = 'font-mono',
+  fontSizePx = 13,
 }: SanitizedTextViewProps) {
   const segments: SanitizedSegment[] = useMemo(() => {
     if (!sanitizedText) return [];
@@ -94,12 +98,15 @@ export function SanitizedTextView({
   }, [rawText, sanitizedText, detections, isCSVMode, activeCategoryFilter]);
 
   return (
-    <div className="min-h-full p-4 font-mono text-[13px] leading-6 text-slate-800 whitespace-pre-wrap break-words dark:text-[#F8FAFC]">
+    <div
+      className={`min-h-full p-5 leading-6 text-slate-800 whitespace-pre-wrap break-words dark:text-[#E2E8F0] ${fontClass}`}
+      style={{ fontSize: `${fontSizePx}px` }}
+    >
       {segments.map((seg) =>
         seg.isRedacted ? (
           <span
             key={seg.key}
-            className="inline-block rounded-md border border-emerald-500/30 bg-emerald-500/12 px-1.5 py-0.5 font-semibold leading-5 text-emerald-800 dark:border-[#34D399]/35 dark:bg-[#34D399]/14 dark:text-[#34D399]"
+            className="inline-block rounded-md border border-emerald-500/30 bg-emerald-500/12 px-1.5 py-0.5 font-mono font-semibold leading-5 text-emerald-800 dark:border-[#34D399]/35 dark:bg-[#34D399]/14 dark:text-[#34D399]"
           >
             {seg.content}
           </span>
@@ -109,4 +116,4 @@ export function SanitizedTextView({
       )}
     </div>
   );
-}
+});
