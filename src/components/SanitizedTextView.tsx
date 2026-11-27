@@ -99,14 +99,14 @@ export const SanitizedTextView = memo(function SanitizedTextView({
 
   return (
     <div
-      className={`min-h-full p-5 leading-6 text-slate-800 whitespace-pre-wrap break-words dark:text-[#E2E8F0] ${fontClass}`}
+      className={`min-h-full p-5 leading-[2.1] text-slate-800 whitespace-pre-wrap break-words dark:text-[#E2E8F0] ${fontClass}`}
       style={{ fontSize: `${fontSizePx}px` }}
     >
       {segments.map((seg) =>
         seg.isRedacted ? (
           <span
             key={seg.key}
-            className="inline-block rounded-md border border-emerald-500/30 bg-emerald-500/12 px-1.5 py-0.5 font-mono font-semibold leading-5 text-emerald-800 dark:border-[#34D399]/35 dark:bg-[#34D399]/14 dark:text-[#34D399]"
+            className="inline box-decoration-clone rounded-md border border-emerald-500/30 bg-emerald-500/12 px-1.5 py-[2px] font-mono font-semibold text-emerald-800 dark:border-[#34D399]/35 dark:bg-[#34D399]/14 dark:text-[#34D399]"
           >
             {seg.content}
           </span>

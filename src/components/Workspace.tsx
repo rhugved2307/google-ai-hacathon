@@ -181,8 +181,8 @@ export function Workspace({
   const outputFileName = uploadedFile
     ? `sanitized-${uploadedFile.name}`
     : isCSVMode
-      ? 'sanitized-dataset.csv'
-      : 'sanitized-document.txt';
+      ? 'sanitized-custom-input.csv'
+      : 'sanitized-custom-input.txt';
 
   const documentHeading = uploadedFile
     ? uploadedFile.name.replace(/\.[^/.]+$/, '').toUpperCase()

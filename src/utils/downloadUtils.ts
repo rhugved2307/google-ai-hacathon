@@ -14,11 +14,11 @@ function triggerLocalBlobDownload(content: string, filename: string, mimeType: s
 }
 
 function getBaseFilename(originalName?: string): string {
-  if (!originalName) return 'veltrix-output';
+  if (!originalName) return 'sanitized-custom-input';
   const dotIdx = originalName.lastIndexOf('.');
   const stem = dotIdx > 0 ? originalName.slice(0, dotIdx) : originalName;
-  const safeStem = stem.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 60) || 'veltrix-output';
-  return `${safeStem}-sanitized`;
+  const safeStem = stem.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 60) || 'custom-input';
+  return `sanitized-${safeStem}`;
 }
 
 export function downloadSanitizedTxt(sanitizedText: string, originalFilename?: string): void {

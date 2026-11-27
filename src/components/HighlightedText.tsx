@@ -129,7 +129,7 @@ export const HighlightedText = memo(function HighlightedText({
 
       {/* Text Content */}
       <div
-        className={`relative flex-1 overflow-auto px-6 py-5 leading-7 text-slate-800 whitespace-pre-wrap break-words dark:text-[#F1F5F9] ${fontClass}`}
+        className={`relative flex-1 overflow-auto px-6 py-5 leading-[2.25] text-slate-800 whitespace-pre-wrap break-words dark:text-[#F1F5F9] ${fontClass}`}
         style={{ fontSize: `${fontSizePx}px` }}
       >
         {segments.map((seg) => {
@@ -150,19 +150,19 @@ export const HighlightedText = memo(function HighlightedText({
               onMouseLeave={() => setHoveredId((curr) => (curr === det.id ? null : curr))}
               onFocus={() => setHoveredId(det.id)}
               onBlur={() => setHoveredId((curr) => (curr === det.id ? null : curr))}
-              className={`relative inline-flex items-baseline gap-1 cursor-help rounded-md border px-1 py-0.5 leading-5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8B5CF6] ${meta.highlightLight} ${meta.highlightDark}`}
+              className={`relative inline box-decoration-clone cursor-help rounded-md border px-1.5 py-[2px] align-baseline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8B5CF6] ${meta.highlightLight} ${meta.highlightDark}`}
             >
               <span>{seg.content}</span>
               <span
                 aria-hidden="true"
-                className="select-none rounded px-1 py-px font-mono text-[9px] font-bold uppercase tracking-wider opacity-80 ring-1 ring-current/25"
+                className="ml-1.5 inline-block select-none rounded px-1 py-[1px] align-middle font-mono text-[9px] font-bold leading-none uppercase tracking-wider opacity-85 ring-1 ring-current/25"
               >
                 {meta.shortLabel}
               </span>
               {isHovered && (
                 <span
                   role="tooltip"
-                  className="pointer-events-none absolute bottom-full left-0 z-30 mb-2 w-64 rounded-xl border border-slate-200 bg-white p-3 font-sans text-left text-xs text-slate-900 shadow-2xl dark:border-white/[0.12] dark:bg-[#131318] dark:text-[#F8FAFC]"
+                  className="pointer-events-none absolute bottom-full left-0 z-30 mb-2 w-64 rounded-xl border border-slate-200 bg-white p-3 font-sans text-left text-xs leading-normal text-slate-900 shadow-2xl dark:border-white/[0.12] dark:bg-[#131318] dark:text-[#F8FAFC]"
                 >
                   <span className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5 dark:border-white/[0.08]">
                     <span className={`font-semibold ${meta.textClass}`}>{meta.label}</span>

@@ -54,6 +54,7 @@ export function useScanner() {
   const debounceRef = useRef<number | null>(null);
   const scanFrameRef = useRef<number | null>(null);
   const lastScanSignatureRef = useRef<string>('');
+  const loadedSourceContentRef = useRef<string | null>(null);
 
   const scanOptions: ScanOptions = useMemo(
     () => ({
@@ -296,13 +297,54 @@ export function useScanner() {
   const updateRawText = useCallback(
     (nextText: string) => {
       setRawText(nextText);
+
       if (!nextText.trim()) {
         setHasScanned(false);
         setScanResult(null);
         setCsvResult(null);
+        setUploadedFile(null);
+        setIsCSVMode(false);
+        setSelectedCSVColumns(undefined);
+        loadedSourceContentRef.current = null;
+        lastScanSignatureRef.current = '';
+        return;
+      }
+
+      // If a file or preset sample was loaded and the user heavily modifies or replaces it
+      // with custom content, detach the stale file metadata so output filenames reflect custom input.
+      if (uploadedFile && loadedSourceContentRef.current !== null) {
+        const orig = loadedSourceContentRef.current;
+        const lengthDelta = Math.abs(nextText.length - orig.length);
+        const origLines = orig
+          .split(/\r?\n/)
+          .map((l) => l.trim())
+          .filter(Boolean);
+        const nextLineSet = new Set(
+          nextText
+            .split(/\r?\n/)
+            .map((l) => l.trim())
+            .filter(Boolean)
+        );
+        const preservedCount = origLines.filter((l) => nextLineSet.has(l)).length;
+        const preservationRatio = origLines.length > 0 ? preservedCount / origLines.length : 0;
+
+        const heavilyModified =
+          lengthDelta > Math.max(24, orig.length * 0.2) || preservationRatio < 0.6;
+
+        if (heavilyModified) {
+          setUploadedFile(null);
+          loadedSourceContentRef.current = null;
+          if (isCSVMode) {
+            const firstLine = nextText.trimStart().split(/\r?\n/)[0] ?? '';
+            if (!firstLine.includes(',')) {
+              setIsCSVMode(false);
+              setSelectedCSVColumns(undefined);
+            }
+          }
+        }
       }
     },
-    []
+    [uploadedFile, isCSVMode]
   );
 
   const loadFile = useCallback(
@@ -316,6 +358,7 @@ export function useScanner() {
         csvResult,
         selectedCSVColumns,
       });
+      loadedSourceContentRef.current = content;
       setRawText(content);
       setUploadedFile(info);
       const csvFlag = info.type === 'csv';
@@ -324,14 +367,13 @@ export function useScanner() {
       setHasScanned(false);
       setScanResult(null);
       setCsvResult(null);
-
-      // If live scan is enabled, it will auto-run via effect
     },
     [rawText, uploadedFile, isCSVMode, hasScanned, scanResult, csvResult, selectedCSVColumns]
   );
 
   const removeFile = useCallback(() => {
     setUndoSnapshot(null);
+    loadedSourceContentRef.current = null;
     lastScanSignatureRef.current = '';
     setUploadedFile(null);
     setRawText('');
@@ -352,6 +394,7 @@ export function useScanner() {
       csvResult,
       selectedCSVColumns,
     });
+    loadedSourceContentRef.current = null;
     setUploadedFile(null);
     setIsCSVMode(false);
     setSelectedCSVColumns(undefined);
@@ -377,6 +420,7 @@ export function useScanner() {
       type: 'csv',
       lastModified: Date.now(),
     };
+    loadedSourceContentRef.current = DEMO_CSV_SAMPLE;
     setUploadedFile(fakeCsvInfo);
     setIsCSVMode(true);
     setSelectedCSVColumns(undefined);
@@ -390,6 +434,7 @@ export function useScanner() {
     // Wipe all sensitive in-memory workspace state, including undo snapshots and session history
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
     if (scanFrameRef.current) window.clearTimeout(scanFrameRef.current);
+    loadedSourceContentRef.current = null;
     lastScanSignatureRef.current = '';
     setUndoSnapshot(null);
     setSessionHistory([]);

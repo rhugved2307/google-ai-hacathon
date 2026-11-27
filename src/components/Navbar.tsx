@@ -5,6 +5,7 @@ import {
   LayoutGrid,
   Menu,
   Moon,
+  RotateCcw,
   Search,
   ShieldCheck,
   SlidersHorizontal,
@@ -24,6 +25,7 @@ interface NavbarProps {
   onOpenSettings: () => void;
   onOpenHelp: () => void;
   onQuickUploadClick: () => void;
+  onResetSession: () => void;
   redactionMode: RedactionMode;
   searchQuery: string;
   onChangeSearch: (q: string) => void;
@@ -37,6 +39,7 @@ export function Navbar({
   onOpenSettings,
   onOpenHelp,
   onQuickUploadClick,
+  onResetSession,
   redactionMode,
   searchQuery,
   onChangeSearch,
@@ -252,6 +255,21 @@ export function Navbar({
                   >
                     <HelpCircle className="h-3.5 w-3.5 text-[#34D399]" />
                     <span>Privacy Verification &amp; Help</span>
+                  </button>
+
+                  <div className="my-1 border-t border-slate-200 dark:border-white/[0.07]" />
+
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onResetSession();
+                    }}
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-amber-700 hover:bg-amber-500/10 dark:text-[#FBBF24] dark:hover:bg-amber-500/15"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    <span>Reset Session / Demo Data</span>
                   </button>
                 </div>
               </div>

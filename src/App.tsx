@@ -280,6 +280,21 @@ export default function App() {
     pushToast('info', 'Settings reset', 'All modes, detectors, and rules restored to defaults.');
   }, [scanner, pushToast]);
 
+  const handleResetSession = useCallback(() => {
+    scanner.clearAll();
+    scanner.resetSettings();
+    setSearchQuery('');
+    setLeftViewMode('edit');
+    setMobileTab('original');
+    setShowHighlights(true);
+    setActiveCategoryFilter('ALL');
+    pushToast(
+      'info',
+      'Session & demo data reset',
+      'Workspace, risk score, session history, and detector defaults restored.'
+    );
+  }, [scanner, pushToast]);
+
   return (
     <div
       id="top"
@@ -309,6 +324,7 @@ export default function App() {
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenHelp={() => setPrivacyModalOpen(true)}
         onQuickUploadClick={handleQuickUploadClick}
+        onResetSession={handleResetSession}
         redactionMode={scanner.redactionMode}
         searchQuery={searchQuery}
         onChangeSearch={setSearchQuery}
@@ -332,6 +348,7 @@ export default function App() {
             onOpenWorkspace={handleOpenWorkspace}
             onLoadAndScanPreset={handleLoadAndScanPreset}
             onOpenSettings={() => setSettingsOpen(true)}
+            onResetSession={handleResetSession}
           />
         ) : (
           <>

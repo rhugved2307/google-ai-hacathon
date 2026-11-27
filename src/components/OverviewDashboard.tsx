@@ -4,6 +4,7 @@ import {
   ChevronDown,
   FileSpreadsheet,
   FileText,
+  RotateCcw,
   ScanSearch,
   SlidersHorizontal,
 } from 'lucide-react';
@@ -34,6 +35,7 @@ interface OverviewDashboardProps {
   onOpenWorkspace: () => void;
   onLoadAndScanPreset: (preset: 'demo-text' | 'demo-csv' | 'support-log' | 'hr-export') => void;
   onOpenSettings: () => void;
+  onResetSession: () => void;
 }
 
 export const SUPPORT_LOG_PRESET = `[2026-11-26 14:22:08] Ticket #4821
@@ -69,6 +71,14 @@ interface RiskDatasetCard {
   isLiveCurrent?: boolean;
 }
 
+function pluralizeCategoryLabel(label: string, count: number): string {
+  if (count === 1) return label;
+  if (label === 'Date of Birth') return 'Dates of Birth';
+  if (label === 'URL / Web Link') return 'URLs / Web Links';
+  if (/(?:s|x|z|ch|sh)$/i.test(label)) return `${label}es`;
+  return `${label}s`;
+}
+
 export function OverviewDashboard({
   hasScanned,
   scanResult,
@@ -79,6 +89,7 @@ export function OverviewDashboard({
   onOpenWorkspace,
   onLoadAndScanPreset,
   onOpenSettings,
+  onResetSession,
 }: OverviewDashboardProps) {
   const [trendScope, setTrendScope] = useState<'categories' | 'severity' | 'session'>('categories');
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -112,10 +123,10 @@ export function OverviewDashboard({
         updatedLabel: 'Just now',
         severity: scanResult.stats.totalDetections >= 8 ? 'critical' : 'warning',
         line1: top1
-          ? `${CATEGORY_META[top1.category].label}s (${top1.count})`
+          ? `${pluralizeCategoryLabel(CATEGORY_META[top1.category].label, top1.count)} (${top1.count})`
           : `Total Findings (${scanResult.stats.totalDetections})`,
         line2: top2
-          ? `${CATEGORY_META[top2.category].label}s (${top2.count})`
+          ? `${pluralizeCategoryLabel(CATEGORY_META[top2.category].label, top2.count)} (${top2.count})`
           : `Characters sanitized (${scanResult.stats.charactersSanitized})`,
         totalFindings: scanResult.stats.totalDetections,
         isLiveCurrent: true,
@@ -675,6 +686,16 @@ export function OverviewDashboard({
               Clean your data. Protect identities. All scanning runs 100% locally in your browser.
             </p>
             <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={onResetSession}
+                title="Reset workspace, risk score, session history, and demo defaults"
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-medium text-slate-700 transition-colors hover:border-amber-400/60 hover:text-amber-700 dark:border-white/10 dark:bg-white/[0.05] dark:text-[#E2E8F0] dark:hover:border-amber-400/50 dark:hover:bg-white/[0.09] dark:hover:text-[#FBBF24]"
+              >
+                <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>Reset Session</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => onLoadAndScanPreset('demo-csv')}
